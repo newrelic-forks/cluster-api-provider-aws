@@ -176,6 +176,7 @@ func controllersPolicy(accountID string) *iam.PolicyDocument {
 					"ec2:DescribeVpcs",
 					"ec2:DetachInternetGateway",
 					"ec2:DisassociateRouteTable",
+					"ec2:ModifyInstanceAttribute",
 					"ec2:ModifySubnetAttribute",
 					"ec2:ReleaseAddress",
 					"ec2:RevokeSecurityGroupIngress",
