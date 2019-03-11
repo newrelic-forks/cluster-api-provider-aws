@@ -211,6 +211,7 @@ func (r *ReconcileMachine) Reconcile(request reconcile.Request) (reconcile.Resul
 				return reconcile.Result{Requeue: true, RequeueAfter: requeueErr.RequeueAfter}, nil
 			}
 
+			klog.Errorf("Actuator returned error: %v", err)
 			return reconcile.Result{}, err
 		}
 
