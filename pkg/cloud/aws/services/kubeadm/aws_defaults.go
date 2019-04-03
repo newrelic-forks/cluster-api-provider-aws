@@ -182,4 +182,23 @@ func SetControlPlaneJoinConfigurationOverrides(base *kubeadmv1beta1.JoinConfigur
 	}
 	base.ControlPlane.LocalAPIEndpoint.AdvertiseAddress = localIPV4Lookup
 	base.ControlPlane.LocalAPIEndpoint.BindPort = apiServerBindPort
+
+	if base.NodeRegistration.Name != "" && base.NodeRegistration.Name != hostnameLookup {
+		klog.Infof("Overriding NodeRegistration name from %q to %q. The node registration needs to be dynamically generated in aws.", base.NodeRegistration.Name, hostnameLookup)
+	}
+	base.NodeRegistration.Name = hostnameLookup
+
+	if base.NodeRegistration.CRISocket != "" && base.NodeRegistration.CRISocket != containerdSocket {
+		klog.Infof("Overriding CRISocket from %q to %q. Containerd is only supported container runtime.", base.NodeRegistration.CRISocket, containerdSocket)
+	}
+	base.NodeRegistration.CRISocket = containerdSocket
+
+	if base.NodeRegistration.KubeletExtraArgs == nil {
+		base.NodeRegistration.KubeletExtraArgs = map[string]string{}
+	}
+
+	if cp, ok := base.NodeRegistration.KubeletExtraArgs["cloud-provider"]; ok && cp != cloudProvider {
+		klog.Infof("Overriding node's cloud-provider to the required value of %q.", cloudProvider)
+	}
+	base.NodeRegistration.KubeletExtraArgs["cloud-provider"] = cloudProvider
 }
