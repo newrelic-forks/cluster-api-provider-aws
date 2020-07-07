@@ -1,7 +1,0 @@
-apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
-kind: EKSConfig
-metadata:
-  name: eksconfig-sample
-spec:
-  # Add fields here
-  foo: bar
