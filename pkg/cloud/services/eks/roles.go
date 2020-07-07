@@ -80,7 +80,6 @@ func (s *Service) reconcileControlPlaneIAMRole() error {
 
 	policies := []*string{
 		aws.String("arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"),
-		aws.String("arn:aws:iam::aws:policy/AmazonEKSServicePolicy"),
 	}
 	if s.scope.ControlPlane.Spec.RoleAdditionalPolicies != nil {
 		for _, additionalPolicy := range *s.scope.ControlPlane.Spec.RoleAdditionalPolicies {
