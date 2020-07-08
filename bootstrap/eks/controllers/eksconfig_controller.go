@@ -23,8 +23,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 
-	bootstrapv1alpha3 "sigs.k8s.io/cluster-api-provider-aws/bootstrap/eks/api/v1alpha3"
+	bootstrapv1 "sigs.k8s.io/cluster-api-provider-aws/bootstrap/eks/api/v1alpha3"
 )
 
 // EKSConfigReconciler reconciles a EKSConfig object
@@ -46,8 +47,9 @@ func (r *EKSConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	return ctrl.Result{}, nil
 }
 
-func (r *EKSConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *EKSConfigReconciler) SetupWithManager(mgr ctrl.Manager, option controller.Options) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&bootstrapv1alpha3.EKSConfig{}).
+		For(&bootstrapv1.EKSConfig{}).
+		WithOptions(option).
 		Complete(r)
 }
