@@ -39,6 +39,9 @@ type EKSConfigStatus struct {
 }
 
 // +kubebuilder:object:root=true
+// +kubebuilder:resource:path=eksconfigs,scope=Namespaced,categories=cluster-api
+// +kubebuilder:storageversion
+// +kubebuilder:subresource:status
 
 // EKSConfig is the Schema for the eksconfigs API
 type EKSConfig struct {

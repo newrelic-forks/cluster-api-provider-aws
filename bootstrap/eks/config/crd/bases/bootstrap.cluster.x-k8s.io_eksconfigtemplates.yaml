@@ -10,6 +10,8 @@ metadata:
 spec:
   group: bootstrap.cluster.x-k8s.io
   names:
+    categories:
+    - cluster-api
     kind: EKSConfigTemplate
     listKind: EKSConfigTemplateList
     plural: eksconfigtemplates

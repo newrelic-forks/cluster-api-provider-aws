@@ -10,6 +10,8 @@ metadata:
 spec:
   group: bootstrap.cluster.x-k8s.io
   names:
+    categories:
+    - cluster-api
     kind: EKSConfig
     listKind: EKSConfigList
     plural: eksconfigs
@@ -47,6 +49,8 @@ spec:
         type: object
     served: true
     storage: true
+    subresources:
+      status: {}
 status:
   acceptedNames:
     kind: ""
