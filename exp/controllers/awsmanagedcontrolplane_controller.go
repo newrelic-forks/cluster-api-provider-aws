@@ -83,8 +83,8 @@ func (r *AWSManagedControlPlaneReconciler) SetupWithManager(mgr ctrl.Manager, op
 
 // +kubebuilder:rbac:groups=core,resources=events,verbs=get;list;watch;create;patch
 // +kubebuilder:rbac:groups=cluster.x-k8s.io,resources=clusters;clusters/status,verbs=get;list;watch
-// +kubebuilder:rbac:groups=exp.infrastructure.cluster.x-k8s.io,resources=ekscontrolplanes,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=exp.infrastructure.cluster.x-k8s.io,resources=ekscontrolplanes/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=exp.infrastructure.cluster.x-k8s.io,resources=awsmanagedcontrolplanes,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=exp.infrastructure.cluster.x-k8s.io,resources=awsmanagedcontrolplanes/status,verbs=get;update;patch
 
 func (r *AWSManagedControlPlaneReconciler) Reconcile(req ctrl.Request) (res ctrl.Result, reterr error) {
 	logger := r.Log.WithValues("namespace", req.Namespace, "eksControlPlane", req.Name)
