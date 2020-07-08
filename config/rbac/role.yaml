@@ -80,7 +80,7 @@ rules:
 - apiGroups:
   - exp.infrastructure.cluster.x-k8s.io
   resources:
-  - ekscontrolplanes
+  - awsmanagedcontrolplanes
   verbs:
   - create
   - delete
@@ -92,7 +92,7 @@ rules:
 - apiGroups:
   - exp.infrastructure.cluster.x-k8s.io
   resources:
-  - ekscontrolplanes/status
+  - awsmanagedcontrolplanes/status
   verbs:
   - get
   - patch
