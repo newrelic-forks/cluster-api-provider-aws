@@ -28,14 +28,14 @@ import (
 	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
 )
 
-// PolicyDocument represesnts an IAM policy docyment
-type PolicyDocument struct {
+// TrustRelationshipPolicyDocument represesnts an IAM policy docyment
+type TrustRelationshipPolicyDocument struct {
 	Version   string
 	Statement []StatementEntry
 }
 
 // ToJSONString converts the document to a JSON string
-func (d *PolicyDocument) ToJSONString() (string, error) {
+func (d *TrustRelationshipPolicyDocument) ToJSONString() (string, error) {
 	b, err := json.Marshal(d)
 	if err != nil {
 		return "", err
@@ -49,7 +49,6 @@ type StatementEntry struct {
 	Effect    string
 	Action    []string
 	Principal map[string][]string
-	Resource  string
 }
 
 func (s *Service) reconcileControlPlaneIAMRole() error {
@@ -310,14 +309,14 @@ func (s *Service) isUnmanaged(role *iam.Role) bool {
 	return true
 }
 
-func (s *Service) controlPlaneTrustRelationship(enableFargate bool) *PolicyDocument {
+func (s *Service) controlPlaneTrustRelationship(enableFargate bool) *TrustRelationshipPolicyDocument {
 	principal := make(map[string][]string)
 	principal["Service"] = []string{"eks.amazonaws.com"}
 	if enableFargate {
 		principal["Service"] = append(principal["Service"], "eks-fargate-pods.amazonaws.com")
 	}
 
-	policy := &PolicyDocument{
+	policy := &TrustRelationshipPolicyDocument{
 		Version: "2012-10-17",
 		Statement: []StatementEntry{
 			{
