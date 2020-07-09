@@ -39,10 +39,29 @@ type EKSConfigReconciler struct {
 // +kubebuilder:rbac:groups=bootstrap.cluster.x-k8s.io,resources=eksconfigs/status,verbs=get;update;patch
 
 func (r *EKSConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	_ = context.Background()
+	ctx := context.Background()
 	_ = r.Log.WithValues("eksconfig", req.NamespacedName)
 
-	// your logic here
+	// get EKSConfig
+	// check owner references and look up owning Machine object
+	// look up Cluster object associated with owning Machine object
+	// check for paused annotation
+	// create "Scope" - struct TBD
+	// set up patchHelper (import from CAPI?)
+	// set up defer block for updating status
+	// check Cluster's InfrastructureReady - requeue if false
+
+	// enter joinWorker
+
+	return r.joinWorker(ctx)
+}
+
+func (r *EKSConfigReconciler) joinWorker(ctx context.Context) (ctrl.Result, error) {
+	// generate userdata
+	// store userdata as secret (this can basically be totally copied from kubeadm provider - any way to reuse?)
+	// set status.DataSecretName
+	// set status.Ready to true
+	// mark DataSecretAvailableCondition as true
 
 	return ctrl.Result{}, nil
 }
