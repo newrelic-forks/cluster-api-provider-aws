@@ -13,7 +13,8 @@ webhooks:
       namespace: system
       path: /validate-bootstrap-cluster-x-k8s-io-v1alpha3-eksconfig
   failurePolicy: Fail
-  name: veksconfig.kb.io
+  matchPolicy: Equivalent
+  name: validation.eksconfig.bootstrap.cluster.x-k8s.io
   rules:
   - apiGroups:
     - bootstrap.cluster.x-k8s.io
@@ -24,3 +25,4 @@ webhooks:
     - UPDATE
     resources:
     - eksconfigs
+  sideEffects: None
