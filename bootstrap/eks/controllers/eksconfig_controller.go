@@ -85,7 +85,6 @@ func (r *EKSConfigReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, rerr e
 
 	log = log.WithValues("kind", configOwner.GetKind(), "version", configOwner.GetResourceVersion(), "name", configOwner.GetName())
 
-	// look up Cluster object associated with owning Machine object
 	cluster, err := util.GetClusterByName(ctx, r.Client, configOwner.GetNamespace(), configOwner.ClusterName())
 	if err != nil {
 		if errors.Cause(err) == util.ErrNoCluster {
@@ -100,7 +99,6 @@ func (r *EKSConfigReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, rerr e
 		return ctrl.Result{}, err
 	}
 
-	// check for paused annotation
 	if annotations.IsPaused(cluster, config) {
 		log.Info("Reconciliation is paused for this object")
 		return ctrl.Result{}, nil
@@ -113,7 +111,6 @@ func (r *EKSConfigReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, rerr e
 		Cluster:     cluster,
 	}
 
-	// set up patchHelper (import from CAPI?)
 	patchHelper, err := patch.NewHelper(config, r.Client)
 	if err != nil {
 		return ctrl.Result{}, err
@@ -134,21 +131,18 @@ func (r *EKSConfigReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, rerr e
 		}
 	}()
 
-	// check Cluster's InfrastructureReady - requeue if false
 	if !cluster.Status.InfrastructureReady {
 		log.Info("Cluster infrastructure is not ready, requeueing")
 		// TODO: set condition
 		return ctrl.Result{}, nil
 	}
 
-	// check Cluster's ControlPlaneInitialized - requeue if false
 	if !cluster.Status.ControlPlaneInitialized {
 		log.Info("Cluster has not yet been initialized, requeueing")
 		// TODO? set condition
 		return ctrl.Result{}, nil
 	}
 
-	// enter joinWorker
 	return r.joinWorker(ctx, scope)
 }
 
