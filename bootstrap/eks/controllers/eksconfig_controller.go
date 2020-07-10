@@ -24,6 +24,7 @@ import (
 	"github.com/pkg/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/cluster-api/util/conditions"
 	"sigs.k8s.io/cluster-api/util/patch"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -118,14 +119,19 @@ func (r *EKSConfigReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, rerr e
 
 	// set up defer block for updating config
 	defer func() {
-		// TODO: update status conditions
-
+		conditions.SetSummary(config,
+			conditions.WithConditions(
+				bootstrapv1.DataSecretAvailableCondition,
+			),
+			conditions.WithStepCounter(),
+		)
 		patchOpts := []patch.Option{}
 		if rerr == nil {
 			patchOpts = append(patchOpts, patch.WithStatusObservedGeneration{})
 		}
 		if err := patchHelper.Patch(ctx, config, patchOpts...); err != nil {
 			log.Error(rerr, "Failed to patch config")
+			config.Status.Ready = true
 			if rerr == nil {
 				rerr = err
 			}
@@ -139,7 +145,8 @@ func (r *EKSConfigReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, rerr e
 
 	if !cluster.Status.ControlPlaneInitialized {
 		log.Info("Cluster has not yet been initialized, requeueing")
-		// TODO? set condition
+		conditions.MarkFalse(scope.Config, bootstrapv1.DataSecretAvailableCondition, bootstrapv1.DataSecretGenerationFailedReason, clusterv1.ConditionSeverityWarning, err.Error())
+
 		return ctrl.Result{}, nil
 	}
 
@@ -154,7 +161,7 @@ func (r *EKSConfigReconciler) joinWorker(ctx context.Context, scope *EKSConfigSc
 	scope.Config.Status.Ready = true
 
 	// mark DataSecretAvailableCondition as true
-	// TODO: Figure out condition util issue
+	conditions.MarkTrue(scope.Config, bootstrapv1.DataSecretAvailableCondition)
 
 	return ctrl.Result{}, nil
 }

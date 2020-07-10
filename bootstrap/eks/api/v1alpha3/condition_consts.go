@@ -16,6 +16,7 @@ package v1alpha3
 import clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
 
 // Conditions and condition Reasons for the EKSConfig object
+// FROM: https://github.com/kubernetes-sigs/cluster-api/blob/master/bootstrap/kubeadm/api/v1alpha3/condition_consts.go
 
 const (
 	// DataSecretAvailableCondition documents the status of the bootstrap secret generation process.
@@ -24,6 +25,9 @@ const (
 	// same reconciliation, so the user will always see a transition from Wait to Generated without having
 	// evidence that BootstrapSecret generation is started/in progress.
 	DataSecretAvailableCondition clusterv1.ConditionType = "DataSecretAvailable"
-)
 
-// FROM: https://github.com/kubernetes-sigs/cluster-api/blob/master/bootstrap/kubeadm/api/v1alpha3/condition_consts.go
+	// DataSecretGenerationFailedReason (Severity=Warning) documents a EKSConfig controller detecting
+	// an error while generating a data secret; those kind of errors are usually due to misconfigurations
+	// and user intervention is required to get them fixed.
+	DataSecretGenerationFailedReason = "DataSecretGenerationFailed"
+)
