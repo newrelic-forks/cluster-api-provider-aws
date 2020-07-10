@@ -140,13 +140,12 @@ func (r *EKSConfigReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, rerr e
 
 	if !cluster.Status.InfrastructureReady {
 		log.Info("Cluster infrastructure is not ready, requeueing")
-		config.Status.Ready = true
+		config.Status.Ready = false
 	}
 
 	if !cluster.Status.ControlPlaneInitialized {
 		log.Info("Cluster has not yet been initialized, requeueing")
 		conditions.MarkFalse(scope.Config, bootstrapv1.DataSecretAvailableCondition, bootstrapv1.DataSecretGenerationFailedReason, clusterv1.ConditionSeverityWarning, err.Error())
-
 		return ctrl.Result{}, nil
 	}
 
