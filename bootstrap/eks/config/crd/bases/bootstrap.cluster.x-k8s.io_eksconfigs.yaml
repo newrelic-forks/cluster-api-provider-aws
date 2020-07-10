@@ -41,13 +41,7 @@ spec:
               kubeletExtraArgs:
                 additionalProperties:
                   type: string
-                description: 'TODO: Fix comment below KubeletExtraArgs passes through
-                  extra arguments to the kubelet. The arguments here are passed to
-                  the kubelet command line via the environment file kubeadm writes
-                  at runtime for the kubelet to source. This overrides the generic
-                  base-level configuration in the kubelet-config-1.X ConfigMap Flags
-                  have higher priority when parsing. These values are local and specific
-                  to the node kubeadm is executing on.'
+                description: Passes the kubelet args into the EKS bootstrap script
                 type: object
             type: object
           status:
