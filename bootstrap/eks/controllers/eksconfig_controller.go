@@ -20,7 +20,10 @@ import (
 	"context"
 
 	"github.com/go-logr/logr"
+	"github.com/prometheus/common/log"
 	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/cluster-api/util/conditions"
+	"sigs.k8s.io/cluster-api/util/patch"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -39,10 +42,37 @@ type EKSConfigReconciler struct {
 // +kubebuilder:rbac:groups=bootstrap.cluster.x-k8s.io,resources=eksconfigs/status,verbs=get;update;patch
 
 func (r *EKSConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	_ = context.Background()
+	ctx = context.Background()
 	_ = r.Log.WithValues("eksconfig", req.NamespacedName)
 
-	// your logic here
+	config := &bootstrapv1.EKSConfig{}
+	if err := r.Client.Get(ctx, req.NamespacedName, config); err != nil {
+		if apierrors.IsNotFound(err) {
+			return ctrl.Result{}, nil
+		}
+		log.Error(err, "Failed to get config")
+		return ctrl.Result{}, err
+	}
+
+	// always update the readyCondition; the summary is represented using the "1 of x completed" notation.
+	conditions.SetSummary(config,
+		conditions.WithConditions(
+			bootstrapv1.DataSecretAvailableCondition,
+			bootstrapv1.CertificatesAvailableCondition,
+		),
+		conditions.WithStepCounter(),
+	)
+	// Patch ObservedGeneration only if the reconciliation completed successfully
+	patchOpts := []patch.Option{}
+	if rerr == nil {
+		patchOpts = append(patchOpts, patch.WithStatusObservedGeneration{})
+	}
+	if err := patchHelper.Patch(ctx, config, patchOpts...); err != nil {
+		log.Error(rerr, "Failed to patch config")
+		if rerr == nil {
+			rerr = err
+		}
+	}
 
 	return ctrl.Result{}, nil
 }
