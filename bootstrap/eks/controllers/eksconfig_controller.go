@@ -131,7 +131,7 @@ func (r *EKSConfigReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, rerr e
 		}
 		if err := patchHelper.Patch(ctx, config, patchOpts...); err != nil {
 			log.Error(rerr, "Failed to patch config")
-			config.Status.Ready = true
+			config.Status.Ready = false
 			if rerr == nil {
 				rerr = err
 			}
