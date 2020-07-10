@@ -33,7 +33,6 @@ import (
 	bsutil "sigs.k8s.io/cluster-api/bootstrap/util"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/annotations"
-	"sigs.k8s.io/cluster-api/util/patch"
 
 	bootstrapv1 "sigs.k8s.io/cluster-api-provider-aws/bootstrap/eks/api/v1alpha3"
 )
@@ -120,6 +119,7 @@ func (r *EKSConfigReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, rerr e
 	// set up defer block for updating config
 	defer func() {
 		// TODO: update status conditions
+
 		patchOpts := []patch.Option{}
 		if rerr == nil {
 			patchOpts = append(patchOpts, patch.WithStatusObservedGeneration{})
@@ -134,8 +134,7 @@ func (r *EKSConfigReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, rerr e
 
 	if !cluster.Status.InfrastructureReady {
 		log.Info("Cluster infrastructure is not ready, requeueing")
-		// TODO: set condition
-		return ctrl.Result{}, nil
+		config.Status.Ready = true
 	}
 
 	if !cluster.Status.ControlPlaneInitialized {
@@ -152,7 +151,10 @@ func (r *EKSConfigReconciler) joinWorker(ctx context.Context, scope *EKSConfigSc
 	// store userdata as secret (this can basically be totally copied from kubeadm provider - any way to reuse?)
 	// set status.DataSecretName
 	// set status.Ready to true
+	scope.Config.Status.Ready = true
+
 	// mark DataSecretAvailableCondition as true
+	// TODO: Figure out condition util issue
 
 	return ctrl.Result{}, nil
 }

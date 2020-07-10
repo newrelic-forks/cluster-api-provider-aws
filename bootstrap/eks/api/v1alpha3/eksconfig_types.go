@@ -52,7 +52,7 @@ type EKSConfigStatus struct {
 	// +optional
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 
-	// Conditions defines current service state of the KubeadmConfig.
+	// Conditions defines current service state of the EKSConfig.
 	// +optional
 	Conditions clusterv1.Conditions `json:"conditions,omitempty"`
 }
@@ -82,4 +82,8 @@ type EKSConfigList struct {
 
 func init() {
 	SchemeBuilder.Register(&EKSConfig{}, &EKSConfigList{})
+}
+
+func (c *EKSConfig) SetConditions(conditions clusterv1.Conditions) {
+	c.Status.Conditions = conditions
 }
