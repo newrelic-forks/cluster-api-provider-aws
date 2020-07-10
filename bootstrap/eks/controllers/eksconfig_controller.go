@@ -28,6 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 
+	"sigs.k8s.io/cluster-api-provider-aws/bootstrap/eks/internal/userdata"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
 	bsutil "sigs.k8s.io/cluster-api/bootstrap/util"
 	"sigs.k8s.io/cluster-api/util"
@@ -147,7 +148,18 @@ func (r *EKSConfigReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, rerr e
 }
 
 func (r *EKSConfigReconciler) joinWorker(ctx context.Context, scope *EKSConfigScope) (ctrl.Result, error) {
+
 	// generate userdata
+	userDataScript, err := userdata.NewNode(&userdata.NodeInput{
+		ClusterName: scope.Cluster.ClusterName,
+	})
+	if err != nil {
+		scope.Error(err, "Failed to create a worker join configuration")
+		return ctrl.Result{}, err
+	}
+
+	scope.Logger.Info(string(userDataScript))
+
 	// store userdata as secret (this can basically be totally copied from kubeadm provider - any way to reuse?)
 	// set status.DataSecretName
 	// set status.Ready to true
