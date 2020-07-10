@@ -22,20 +22,24 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 
-	"sigs.k8s.io/cluster-api-provider-aws/bootstrap/eks/internal/userdata"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
 	bsutil "sigs.k8s.io/cluster-api/bootstrap/util"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/annotations"
+	"sigs.k8s.io/cluster-api/util/conditions"
 	"sigs.k8s.io/cluster-api/util/patch"
 
 	bootstrapv1 "sigs.k8s.io/cluster-api-provider-aws/bootstrap/eks/api/v1alpha3"
+	"sigs.k8s.io/cluster-api-provider-aws/bootstrap/eks/internal/userdata"
 )
 
 // EKSConfigReconciler reconciles a EKSConfig object
@@ -158,12 +162,11 @@ func (r *EKSConfigReconciler) joinWorker(ctx context.Context, scope *EKSConfigSc
 		return ctrl.Result{}, err
 	}
 
-	scope.Logger.Info(string(userDataScript))
-
-	// store userdata as secret (this can basically be totally copied from kubeadm provider - any way to reuse?)
-	// set status.DataSecretName
-	// set status.Ready to true
-	// mark DataSecretAvailableCondition as true
+	// store userdata as secret
+	if err := r.storeBootstrapData(ctx, scope, userDataScript); err != nil {
+		scope.Error(err, "Failed to store bootstrap data")
+		return ctrl.Result{}, err
+	}
 
 	return ctrl.Result{}, nil
 }
@@ -173,4 +176,45 @@ func (r *EKSConfigReconciler) SetupWithManager(mgr ctrl.Manager, option controll
 		For(&bootstrapv1.EKSConfig{}).
 		WithOptions(option).
 		Complete(r)
+}
+
+// storeBootstrapData creates a new secret with the data passed in as input,
+// sets the reference in the configuration status and ready to true.
+func (r *EKSConfigReconciler) storeBootstrapData(ctx context.Context, scope *EKSConfigScope, data []byte) error {
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      scope.Config.Name,
+			Namespace: scope.Config.Namespace,
+			Labels: map[string]string{
+				clusterv1.ClusterLabelName: scope.Cluster.Name,
+			},
+			OwnerReferences: []metav1.OwnerReference{
+				{
+					APIVersion: bootstrapv1.GroupVersion.String(),
+					Kind:       "EKSConfig",
+					Name:       scope.Config.Name,
+					UID:        scope.Config.UID,
+					Controller: pointer.BoolPtr(true),
+				},
+			},
+		},
+		Data: map[string][]byte{
+			"value": data,
+		},
+		Type: clusterv1.ClusterSecretType,
+	}
+
+	// as secret creation and scope.Config status patch are not atomic operations
+	// it is possible that secret creation happens but the config.Status patches are not applied
+	if err := r.Client.Create(ctx, secret); err != nil {
+		if !apierrors.IsAlreadyExists(err) {
+			return errors.Wrapf(err, "failed to create bootstrap data secret for EKSConfig %s/%s", scope.Config.Namespace, scope.Config.Name)
+		}
+		r.Log.Info("bootstrap data secret for EKSConfig already exists", "secret", secret.Name, "EKSConfig", scope.Config.Name)
+	}
+	scope.Config.Status.DataSecretName = pointer.StringPtr(secret.Name)
+	scope.Config.Status.Ready = true
+
+	conditions.MarkTrue(scope.Config, bootstrapv1.DataSecretAvailableCondition)
+	return nil
 }

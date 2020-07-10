@@ -7,6 +7,8 @@ require (
 	github.com/awslabs/goformation/v4 v4.11.0
 	github.com/go-logr/logr v0.1.0
 	github.com/golang/mock v1.4.3
+	github.com/google/martian v2.1.0+incompatible
+	github.com/newrelic-forks/cluster-api-provider-aws v0.1.0
 	github.com/onsi/ginkgo v1.12.2
 	github.com/onsi/gomega v1.10.1
 	github.com/pkg/errors v0.9.1
