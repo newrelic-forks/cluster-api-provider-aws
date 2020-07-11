@@ -18,6 +18,7 @@ package eks
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -25,6 +26,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/eks"
 
 	"github.com/pkg/errors"
+	"k8s.io/apimachinery/pkg/util/version"
 
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/awserrors"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/services/wait"
@@ -57,12 +59,25 @@ func (s *Service) reconcileCluster(ctx context.Context) error {
 		return errors.Wrap(err, "failed to update control plane")
 	}
 
-	cluster, err = s.waitForClusterActive()
+	switch *cluster.Status {
+	case eks.ClusterStatusUpdating:
+		cluster, err = s.waitForClusterUpdate()
+	case eks.ClusterStatusCreating:
+		cluster, err = s.waitForClusterActive()
+	default:
+		break
+	}
 	if err != nil {
 		return errors.Wrap(err, "failed to wait for cluster to be active")
 	}
 
-	s.scope.ControlPlane.Status.Ready = true
+	var ready bool = *cluster.Status == eks.ClusterStatusActive
+	if !ready {
+		// TODO set Failed
+		return errors.Wrap(err, "cluster failed or deleting")
+	}
+
+	s.scope.ControlPlane.Status.Ready = ready
 	if err := s.scope.PatchObject(); err != nil {
 		return errors.Wrap(err, "failed to update control plane")
 	}
@@ -76,6 +91,10 @@ func (s *Service) reconcileCluster(ctx context.Context) error {
 
 	if err := s.reconcileKubeconfig(ctx, cluster); err != nil {
 		return errors.Wrap(err, "failed reconciling kubeconfig")
+	}
+
+	if err := s.reconcileClusterVersion(ctx, cluster); err != nil {
+		return errors.Wrap(err, "failed reconciling cluster versions")
 	}
 
 	return nil
@@ -207,6 +226,44 @@ func (s *Service) waitForClusterActive() (*eks.Cluster, error) {
 		return nil, errors.Wrap(err, "failed to describe eks clusters")
 	}
 
+	return cluster, nil
+}
+
+func (s *Service) reconcileClusterVersion(ctx context.Context, cluster *eks.Cluster) error {
+	specVersion := version.MustParseGeneric(*s.scope.ControlPlane.Spec.Version)
+	clusterVersion := version.MustParseGeneric(*cluster.Version)
+	if clusterVersion.LessThan(specVersion) {
+		nextVersion := clusterVersion.WithMinor(clusterVersion.Minor() + 1)
+		nextVersionString := fmt.Sprintf("%d.%d", nextVersion.Major(), nextVersion.Minor())
+
+		input := &eks.UpdateClusterVersionInput{
+			Name:    cluster.Name,
+			Version: &nextVersionString,
+		}
+
+		if err := wait.WaitForWithRetryable(wait.NewBackoff(), func() (bool, error) {
+			if _, err := s.scope.EKS.UpdateClusterVersion(input); err != nil {
+				if aerr, ok := err.(awserr.Error); ok {
+					return false, aerr
+				}
+				return false, err
+			}
+			return true, nil
+		}); err != nil {
+			record.Warnf(s.scope.ControlPlane, "FailedUpdateEKSControlPlane", "failed to update the EKS control plane: %v", err)
+			return errors.Wrapf(err, "failed to update EKS cluster")
+		}
+	}
+	return nil
+}
+
+func (s *Service) waitForClusterUpdate() (*eks.Cluster, error) {
+	cluster, err := s.waitForClusterActive()
+	if err != nil {
+		return nil, err
+	}
+
+	record.Eventf(s.scope.ControlPlane, "SuccessfulUpdateEKSControlPlane", "Upgraded control plane to %s", *cluster.Version)
 	return cluster, nil
 }
 
