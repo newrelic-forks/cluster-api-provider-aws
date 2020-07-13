@@ -139,7 +139,6 @@ func (r *EKSConfigReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, rerr e
 
 	if !cluster.Status.InfrastructureReady {
 		log.Info("Cluster infrastructure is not ready, requeueing")
-				log.Info("Cluster infrastructure is not ready, requeueing")
 		conditions.MarkFalse(config,
 			bootstrapv1.DataSecretAvailableCondition,
 			bootstrapv1.WaitingForClusterInfrastructureReason,

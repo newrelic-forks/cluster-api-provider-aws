@@ -30,4 +30,11 @@ const (
 	// an error while generating a data secret; those kind of errors are usually due to misconfigurations
 	// and user intervention is required to get them fixed.
 	DataSecretGenerationFailedReason = "DataSecretGenerationFailed"
+
+	// WaitingForClusterInfrastructureReason (Severity=Info) document a bootstrap secret generation process
+	// waiting for the cluster infrastructure to be ready.
+	//
+	// NOTE: Having the cluster infrastructure ready is a pre-condition for starting to create machines;
+	// the EKSConfig controller ensure this pre-condition is satisfied.
+	WaitingForClusterInfrastructureReason = "WaitingForClusterInfrastructure"
 )
