@@ -88,7 +88,7 @@ func newCluster(name string) *clusterv1.Cluster {
 	}
 }
 
-// newEKSConfig return a CABPK EKSConfig object; if machine is not nil, the EKSConfig is linked to the machine as well
+// newEKSConfig return an EKSConfig object; if machine is not nil, the EKSConfig is linked to the machine as well
 func newEKSConfig(machine *clusterv1.Machine, name string) *bootstrapv1.EKSConfig {
 	config := &bootstrapv1.EKSConfig{
 		TypeMeta: metav1.TypeMeta{
