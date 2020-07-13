@@ -25,23 +25,17 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	bootstrapv1 "sigs.k8s.io/cluster-api-provider-aws/bootstrap/eks/api/v1alpha3"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
-	"sigs.k8s.io/cluster-api/test/helpers"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-var (
-	testEnv *helpers.TestEnvironment
-	ctx     = context.Background()
-)
-
 var _ = Describe("EKSConfigReconciler", func() {
 	BeforeEach(func() {})
 	AfterEach(func() {})
 
-	Context("Reconcile a EKSConfig", func() {
+	Context("Reconcile an EKSConfig", func() {
 		It("should wait until infrastructure is ready", func() {
 			cluster := newCluster("cluster1")
 			Expect(testEnv.Create(context.Background(), cluster)).To(Succeed())
