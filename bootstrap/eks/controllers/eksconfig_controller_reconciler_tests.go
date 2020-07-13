@@ -19,15 +19,22 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	bootstrapv1 "sigs.k8s.io/cluster-api-provider-aws/bootstrap/eks/api/v1alpha3"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
+	"sigs.k8s.io/cluster-api/test/helpers"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+)
+
+var (
+	testEnv *helpers.TestEnvironment
+	ctx     = context.Background()
 )
 
 var _ = Describe("EKSConfigReconciler", func() {
@@ -86,6 +93,35 @@ func newCluster(name string) *clusterv1.Cluster {
 			Name:      name,
 		},
 	}
+}
+
+// newMachine return a CAPI machine object; if cluster is not nil, the machine is linked to the cluster as well
+func newMachine(cluster *clusterv1.Cluster, name string) *clusterv1.Machine {
+	machine := &clusterv1.Machine{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Machine",
+			APIVersion: clusterv1.GroupVersion.String(),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      name,
+		},
+		Spec: clusterv1.MachineSpec{
+			Bootstrap: clusterv1.Bootstrap{
+				ConfigRef: &corev1.ObjectReference{
+					Kind:       "KubeadmConfig",
+					APIVersion: bootstrapv1.GroupVersion.String(),
+				},
+			},
+		},
+	}
+	if cluster != nil {
+		machine.Spec.ClusterName = cluster.Name
+		machine.ObjectMeta.Labels = map[string]string{
+			clusterv1.ClusterLabelName: cluster.Name,
+		}
+	}
+	return machine
 }
 
 // newEKSConfig return an EKSConfig object; if machine is not nil, the EKSConfig is linked to the machine as well
