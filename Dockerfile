@@ -35,12 +35,11 @@ RUN wget --output-document /restart.sh --quiet https://raw.githubusercontent.com
     chmod +x /start.sh && chmod +x /restart.sh
 
 # Build
-ARG package=.
 ARG ARCH
 ARG LDFLAGS
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${ARCH} \
     go build -a -ldflags "${LDFLAGS} -extldflags '-static'" \
-    -o manager ${package}
+    -o manager .
 ENTRYPOINT [ "/start.sh", "/workspace/manager" ]
 
 # Copy the controller-manager into a thin image
