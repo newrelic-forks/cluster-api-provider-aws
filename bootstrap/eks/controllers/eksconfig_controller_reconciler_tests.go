@@ -109,7 +109,7 @@ func newMachine(cluster *clusterv1.Cluster, name string) *clusterv1.Machine {
 		Spec: clusterv1.MachineSpec{
 			Bootstrap: clusterv1.Bootstrap{
 				ConfigRef: &corev1.ObjectReference{
-					Kind:       "KubeadmConfig",
+					Kind:       "EKSConfig",
 					APIVersion: bootstrapv1.GroupVersion.String(),
 				},
 			},
