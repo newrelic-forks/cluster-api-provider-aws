@@ -131,7 +131,6 @@ func (r *EKSConfigReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, rerr e
 		}
 		if err := patchHelper.Patch(ctx, config, patchOpts...); err != nil {
 			log.Error(rerr, "Failed to patch config")
-			config.Status.Ready = false
 			if rerr == nil {
 				rerr = err
 			}
@@ -140,7 +139,12 @@ func (r *EKSConfigReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, rerr e
 
 	if !cluster.Status.InfrastructureReady {
 		log.Info("Cluster infrastructure is not ready, requeueing")
-		config.Status.Ready = false
+				log.Info("Cluster infrastructure is not ready, requeueing")
+		conditions.MarkFalse(config,
+			bootstrapv1.DataSecretAvailableCondition,
+			bootstrapv1.WaitingForClusterInfrastructureReason,
+			clusterv1.ConditionSeverityInfo, "")
+		return ctrl.Result{}, nil
 	}
 
 	if !cluster.Status.ControlPlaneInitialized {
