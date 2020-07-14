@@ -136,22 +136,22 @@ func (r *EKSConfigReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, rerr e
 		}
 	}()
 
-	if !cluster.Status.InfrastructureReady {
-		log.Info("Cluster infrastructure is not ready, requeueing")
-		// TODO: set condition
-		return ctrl.Result{}, nil
-	}
-
-	if !cluster.Status.ControlPlaneInitialized {
-		log.Info("Cluster has not yet been initialized, requeueing")
-		// TODO? set condition
-		return ctrl.Result{}, nil
-	}
-
 	return r.joinWorker(ctx, scope)
 }
 
 func (r *EKSConfigReconciler) joinWorker(ctx context.Context, scope *EKSConfigScope) (ctrl.Result, error) {
+
+	if !scope.Cluster.Status.InfrastructureReady {
+		scope.Logger.Info("Cluster infrastructure is not ready, requeueing")
+		// TODO: set condition
+		return ctrl.Result{}, nil
+	}
+
+	if !scope.Cluster.Status.ControlPlaneInitialized {
+		scope.Logger.Info("Cluster has not yet been initialized, requeueing")
+		// TODO? set condition
+		return ctrl.Result{}, nil
+	}
 
 	// generate userdata
 	userDataScript, err := userdata.NewNode(&userdata.NodeInput{
