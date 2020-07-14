@@ -35,8 +35,6 @@ import (
 	bsutil "sigs.k8s.io/cluster-api/bootstrap/util"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/annotations"
-	"sigs.k8s.io/cluster-api/util/patch"
-
 
 	bootstrapv1 "sigs.k8s.io/cluster-api-provider-aws/bootstrap/eks/api/v1alpha3"
 )
@@ -170,7 +168,6 @@ func (r *EKSConfigReconciler) joinWorker(ctx context.Context, scope *EKSConfigSc
 
 	// mark DataSecretAvailableCondition as true
 	conditions.MarkTrue(scope.Config, bootstrapv1.DataSecretAvailableCondition)
-
 	return ctrl.Result{}, nil
 }
 

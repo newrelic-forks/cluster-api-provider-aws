@@ -53,7 +53,6 @@ type EKSConfigStatus struct {
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 
 	// Conditions defines current service state of the EKSConfig.
-
 	// +optional
 	Conditions clusterv1.Conditions `json:"conditions,omitempty"`
 }

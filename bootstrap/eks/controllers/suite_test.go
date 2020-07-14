@@ -17,7 +17,6 @@ limitations under the License.
 package controllers
 
 import (
-	"path/filepath"
 	"testing"
 
 	. "github.com/onsi/ginkgo"
