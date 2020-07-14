@@ -125,6 +125,7 @@ func newEKSConfig(machine *clusterv1.Machine, name string) *bootstrapv1.EKSConfi
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
 			Name:      name,
+			UID:       types.UID(fmt.Sprintf("%s uid", name)),
 		},
 	}
 	if machine != nil {
