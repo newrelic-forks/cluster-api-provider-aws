@@ -50,7 +50,6 @@ type EKSConfigTemplate struct {
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	Spec   EKSConfigTemplateSpec   `json:"spec,omitempty"`
-	Status EKSConfigTemplateStatus `json:"status,omitempty"`
 }
 
 // +kubebuilder:object:root=true
