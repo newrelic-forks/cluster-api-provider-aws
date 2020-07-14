@@ -45,9 +45,7 @@ func init() {
 	klog.SetOutput(ginkgo.GinkgoWriter)
 }
 
-var (
-	env *envtest.Environment
-)
+var env *envtest.Environment
 
 func init() {
 	// Calculate the scheme.
