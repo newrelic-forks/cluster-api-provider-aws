@@ -165,7 +165,8 @@ func (r *EKSConfigReconciler) joinWorker(ctx context.Context, scope *EKSConfigSc
 	}
 
 	userDataScript, err := userdata.NewNode(&userdata.NodeInput{
-		ClusterName: scope.Cluster.ClusterName,
+		ClusterName:      scope.Cluster.ClusterName,
+		KubeletExtraArgs: scope.Config.Spec.KubeletExtraArgs,
 	})
 	if err != nil {
 		scope.Error(err, "Failed to create a worker join configuration")

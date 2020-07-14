@@ -25,18 +25,27 @@ import (
 
 const (
 	nodeUserData = `#!/bin/bash
-/etc/eks/bootstrap.sh {{.ClusterName}}
+/etc/eks/bootstrap.sh {{.ClusterName}} {{- template "args" .KubeletExtraArgs }}
 `
 )
 
 // NodeInput defines the context to generate a node user data.
 type NodeInput struct {
-	ClusterName string
+	ClusterName      string
+	KubeletExtraArgs map[string]string
 }
 
 // NewNode returns the user data string to be used on a node instance.
 func NewNode(input *NodeInput) ([]byte, error) {
 	tm := template.New("Node")
+
+	if _, err := tm.Parse(argsTemplate); err != nil {
+		return nil, errors.Wrap(err, "failed to parse args template")
+	}
+
+	if _, err := tm.Parse(kubeletArgsTemplate); err != nil {
+		return nil, errors.Wrap(err, "failed to parse kubeletExtraArgs template")
+	}
 
 	t, err := tm.Parse(nodeUserData)
 	if err != nil {
