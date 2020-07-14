@@ -168,6 +168,28 @@ func (s *Service) deleteClusterAndWait(cluster *eks.Cluster) error {
 	return nil
 }
 
+func makeEksLogging(loggingSpec map[string]bool) eks.Logging {
+	var on = true
+	var off = false
+	enabled := eks.LogSetup{Enabled: &on}
+	disabled := eks.LogSetup{Enabled: &off}
+	for k, v := range loggingSpec {
+		if v {
+			enabled.Types = append(enabled.Types, &k)
+		} else {
+			disabled.Types = append(disabled.Types, &k)
+		}
+	}
+	logging := eks.Logging{}
+	if len(enabled.Types) > 0 {
+		logging.ClusterLogging = append(logging.ClusterLogging, &enabled)
+	}
+	if len(disabled.Types) > 0 {
+		logging.ClusterLogging = append(logging.ClusterLogging, &disabled)
+	}
+	return logging
+}
+
 func (s *Service) createCluster() (*eks.Cluster, error) {
 	// TODO: Do we need to just add the private subnets?
 	subnets := s.scope.Subnets()
@@ -205,11 +227,12 @@ func (s *Service) createCluster() (*eks.Cluster, error) {
 		return nil, errors.Wrapf(err, "error getting control plane iam role: %s", *s.scope.ControlPlane.Spec.RoleName)
 	}
 
+	logging := makeEksLogging(s.scope.ControlPlane.Spec.Logging)
 	input := &eks.CreateClusterInput{
 		Name: &s.scope.Cluster.Name,
 		//ClientRequestToken: aws.String(uuid.New().String()),
 		Version: aws.String(version),
-		//Logging: &eks.Logging{},
+		Logging: &logging,
 		ResourcesVpcConfig: &eks.VpcConfigRequest{
 			SubnetIds: subnetIds,
 		},
