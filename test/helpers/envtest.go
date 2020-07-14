@@ -22,8 +22,6 @@ import (
 	goruntime "runtime"
 
 	"github.com/onsi/ginkgo"
-	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -32,8 +30,6 @@ import (
 
 	bootstrapv1 "sigs.k8s.io/cluster-api-provider-aws/bootstrap/eks/api/v1alpha3"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
-	"sigs.k8s.io/cluster-api/controllers/external"
-	expv1 "sigs.k8s.io/cluster-api/exp/api/v1alpha3"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/kubeconfig"
 
@@ -55,10 +51,8 @@ var (
 
 func init() {
 	// Calculate the scheme.
-	utilruntime.Must(apiextensionsv1.AddToScheme(scheme.Scheme))
 	utilruntime.Must(clusterv1.AddToScheme(scheme.Scheme))
 	utilruntime.Must(bootstrapv1.AddToScheme(scheme.Scheme))
-	utilruntime.Must(expv1.AddToScheme(scheme.Scheme))
 
 	// Get the root of the current file to use in CRD paths.
 	_, filename, _, _ := goruntime.Caller(0) //nolint
@@ -70,12 +64,6 @@ func init() {
 		CRDDirectoryPaths: []string{
 			filepath.Join(root, "config", "crd", "bases"),
 			filepath.Join(root, "bootstrap", "eks", "config", "crd", "bases"),
-		},
-		CRDs: []runtime.Object{
-			external.TestGenericBootstrapCRD.DeepCopy(),
-			external.TestGenericBootstrapTemplateCRD.DeepCopy(),
-			external.TestGenericInfrastructureCRD.DeepCopy(),
-			external.TestGenericInfrastructureTemplateCRD.DeepCopy(),
 		},
 	}
 }
@@ -124,6 +112,7 @@ func (t *TestEnvironment) Stop() error {
 	return env.Stop()
 }
 
+// TODO(rudoi): is this required? how will this work with EKS?
 func (t *TestEnvironment) CreateKubeconfigSecret(cluster *clusterv1.Cluster) error {
 	return kubeconfig.CreateEnvTestSecret(t.Client, t.Config, cluster)
 }

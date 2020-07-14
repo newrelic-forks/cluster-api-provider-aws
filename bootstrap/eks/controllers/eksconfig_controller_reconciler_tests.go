@@ -23,11 +23,12 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	bootstrapv1 "sigs.k8s.io/cluster-api-provider-aws/bootstrap/eks/api/v1alpha3"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
 	"sigs.k8s.io/cluster-api/bootstrap/util"
+	"sigs.k8s.io/yaml"
 
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -37,11 +38,22 @@ var _ = Describe("EKSConfigReconciler", func() {
 
 	Context("Reconcile an EKSConfig", func() {
 		It("should wait until infrastructure is ready", func() {
+			cluster := newCluster("test-cluster")
+			machine := newMachine(cluster, "test-machine")
+			config := newEKSConfig(machine, "test-config")
+
+			bytes, err := yaml.Marshal(machine)
+			Expect(err).To(BeNil())
+
+			owner := &unstructured.Unstructured{}
+			err = yaml.Unmarshal(bytes, owner)
+			Expect(err).To(BeNil())
+
 			scope := &EKSConfigScope{
 				Logger:      log.Log,
-				Config:      &bootstrapv1.EKSConfig{},
-				ConfigOwner: &util.ConfigOwner{},
-				Cluster:     &clusterv1.Cluster{},
+				Config:      config,
+				ConfigOwner: &util.ConfigOwner{Unstructured: owner},
+				Cluster:     cluster,
 			}
 
 			reconciler := EKSConfigReconciler{
@@ -56,18 +68,6 @@ var _ = Describe("EKSConfigReconciler", func() {
 		})
 	})
 })
-
-// getEKSConfig returns a EKSConfig object from the cluster
-func getEKSConfig(c client.Client, name string) (*bootstrapv1.EKSConfig, error) {
-	ctx := context.Background()
-	controlplaneConfigKey := client.ObjectKey{
-		Namespace: "default",
-		Name:      name,
-	}
-	config := &bootstrapv1.EKSConfig{}
-	err := c.Get(ctx, controlplaneConfigKey, config)
-	return config, err
-}
 
 // newCluster return a CAPI cluster object
 func newCluster(name string) *clusterv1.Cluster {
