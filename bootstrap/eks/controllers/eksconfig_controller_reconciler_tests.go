@@ -46,7 +46,7 @@ var _ = Describe("EKSConfigReconciler", func() {
 
 			reconciler := EKSConfigReconciler{
 				Log:    log.Log,
-				Client: testEnv,
+				Client: testEnv.Client,
 			}
 
 			By("Calling reconcile should requeue")
