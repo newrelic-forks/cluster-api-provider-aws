@@ -29,9 +29,7 @@ import (
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
 // http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
 
-var (
-	testEnv *helpers.TestEnvironment
-)
+var testEnv *helpers.TestEnvironment
 
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
