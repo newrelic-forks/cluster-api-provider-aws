@@ -164,13 +164,8 @@ func (r *EKSConfigReconciler) joinWorker(ctx context.Context, scope *EKSConfigSc
 		return ctrl.Result{}, nil
 	}
 
-	// generate userdata
-	// store userdata as secret (this can basically be totally copied from kubeadm provider - any way to reuse?)
-	// set status.DataSecretName
-	// set status.Ready to true
 	scope.Config.Status.Ready = true
 
-	// mark DataSecretAvailableCondition as true
 	conditions.MarkTrue(scope.Config, bootstrapv1.DataSecretAvailableCondition)
 	userDataScript, err := userdata.NewNode(&userdata.NodeInput{
 		ClusterName: scope.Cluster.ClusterName,
