@@ -25,20 +25,17 @@ import (
 
 // AWSLaunchTemplateSpec defines the desired state of AWSLaunchTemplate
 type AWSLaunchTemplateSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	// all the things needed for a launch template
 
-	// Foo is an example field of AWSLaunchTemplate. Edit AWSLaunchTemplate_types.go to remove/update
 	Foo string `json:"foo,omitempty"`
 }
 
 // AWSLaunchTemplateStatus defines the observed state of AWSLaunchTemplate
 type AWSLaunchTemplateStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
 }
 
 // +kubebuilder:object:root=true
+// +kubebuilder:resource:path=awslaunchtemplates,scope=Namespaced,categories=cluster-api
 
 // AWSLaunchTemplate is the Schema for the awslaunchtemplates API
 type AWSLaunchTemplate struct {

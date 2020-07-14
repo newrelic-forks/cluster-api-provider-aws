@@ -18,6 +18,7 @@ package services
 
 import (
 	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
+	expinfrav1 "sigs.k8s.io/cluster-api-provider-aws/exp/api/v1alpha3"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/scope"
 )
 
@@ -36,6 +37,9 @@ type EC2MachineInterface interface {
 
 	TerminateInstanceAndWait(instanceID string) error
 	DetachSecurityGroupsFromNetworkInterface(groups []string, interfaceID string) error
+
+	GetLaunchTemplate(name string) (*expinfrav1.AwsLaunchTemplate, error)
+	CreateLaunchTemplate(scope *scope.MachinePoolScope) (*expinfrav1.AwsLaunchTemplate, error)
 }
 
 // SecretsManagerInterface encapsulated the methods exposed to the

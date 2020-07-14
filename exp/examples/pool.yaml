@@ -1,0 +1,27 @@
+---
+apiVersion: exp.infrastructure.cluster.x-k8s.io/v1alpha3
+kind: AWSMachinePool
+metadata:
+  name: capa-mp-0
+spec:
+  minSize: 2
+  maxSize: 10
+  availabilityZones: ["us-east-1"]
+  mixedInstancesPolicy:
+    instancesDistribution:
+      onDemandAllocationStrategy: 70%
+      spotAllocationStrategy: 30%
+  awsLaunchTemplate:
+    imageId: "ami-06001cac528f2f10c"
+    instanceType: "t2.medium"
+    sshKeyName: "confab_development"
+    blockDeviceMappings:
+    - deviceName: "/dev/xvda"
+      ebs:
+        encrypted: false
+        volumeSize: 80
+        volumeType: gp2
+    networkInterfaces:
+    - groups:
+      - sg-0e5dfcb2de6ae495b
+      - sg-02f5ddf1ac23d18d6

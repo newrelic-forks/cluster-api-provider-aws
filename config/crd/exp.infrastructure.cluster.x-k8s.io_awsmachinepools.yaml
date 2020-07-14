@@ -4,14 +4,12 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.2.9
+    controller-gen.kubebuilder.io/version: v0.2.8
   creationTimestamp: null
   name: awsmachinepools.exp.infrastructure.cluster.x-k8s.io
 spec:
   group: exp.infrastructure.cluster.x-k8s.io
   names:
-    categories:
-    - cluster-api
     kind: AWSMachinePool
     listKind: AWSMachinePoolList
     plural: awsmachinepools
@@ -44,60 +42,6 @@ spec:
                 items:
                   type: string
                 type: array
-              awsLaunchTemplate:
-                description: AwsLaunchTemplate defines the desired state of AWSLaunchTemplate
-                properties:
-                  blockDeviceMappings:
-                    items:
-                      description: BlockDeviceMappings from describe-launch-templates
-                      properties:
-                        deviceName:
-                          type: string
-                        ebs:
-                          description: EBS from describe-launch-templates
-                          properties:
-                            encrypted:
-                              type: boolean
-                            volumeSize:
-                              format: int64
-                              type: integer
-                            volumeType:
-                              type: string
-                          type: object
-                      type: object
-                    type: array
-                  iamInstanceProfile:
-                    type: string
-                  imageId:
-                    description: 'todo: use a helper'
-                    type: string
-                  instanceType:
-                    description: 'InstanceType is the type of instance to create.
-                      Example: m4.xlarge'
-                    type: string
-                  networkInterfaces:
-                    items:
-                      description: NetworkInterface from describe-launch-templates
-                      properties:
-                        deviceIndex:
-                          format: int64
-                          type: integer
-                        groups:
-                          items:
-                            type: string
-                          type: array
-                      type: object
-                    type: array
-                  sshKeyName:
-                    description: SSHKeyName is the name of the ssh key to attach to
-                      the instance. Valid values are empty string (do not use SSH
-                      keys), a valid SSH key name, or omitted (use the default SSH
-                      key name)
-                    type: string
-                  versionNumber:
-                    format: int64
-                    type: integer
-                type: object
               defaultCooldown:
                 type: integer
               desiredCapacity:
@@ -111,10 +55,8 @@ spec:
               minSize:
                 type: integer
               mixedInstancesPolicy:
-                description: MixedInstancesPolicy from describe-auto-scaling-groups
                 properties:
                   instancesDistribution:
-                    description: InstancesDistribution from describe-auto-scaling-groups
                     properties:
                       onDemandAllocationStrategy:
                         type: string
@@ -126,10 +68,8 @@ spec:
                         type: string
                     type: object
                   launchTemplate:
-                    description: LaunchTemplate from describe-auto-scaling-groups
                     properties:
                       launchTemplateSpecification:
-                        description: LaunchTemplateSpecification from describe-auto-scaling-groups
                         properties:
                           launchTemplateId:
                             type: string
@@ -140,7 +80,6 @@ spec:
                         type: object
                       overrides:
                         items:
-                          description: Overrides from describe-auto-scaling-groups
                           properties:
                             InstanceType:
                               type: string
@@ -156,7 +95,6 @@ spec:
                 type: string
               tags:
                 items:
-                  description: Tags from describe-auto-scaling-groups
                   properties:
                     key:
                       type: string

@@ -10,6 +10,8 @@ metadata:
 spec:
   group: exp.infrastructure.cluster.x-k8s.io
   names:
+    categories:
+    - cluster-api
     kind: AWSLaunchTemplate
     listKind: AWSLaunchTemplateList
     plural: awslaunchtemplates
@@ -37,8 +39,6 @@ spec:
             description: AWSLaunchTemplateSpec defines the desired state of AWSLaunchTemplate
             properties:
               foo:
-                description: Foo is an example field of AWSLaunchTemplate. Edit AWSLaunchTemplate_types.go
-                  to remove/update
                 type: string
             type: object
           status:
