@@ -25,7 +25,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	bootstrapv1 "sigs.k8s.io/cluster-api-provider-aws/bootstrap/eks/api/v1alpha3"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
-	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/cluster-api/bootstrap/util"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -37,26 +37,20 @@ var _ = Describe("EKSConfigReconciler", func() {
 
 	Context("Reconcile an EKSConfig", func() {
 		It("should wait until infrastructure is ready", func() {
-			cluster := newCluster("cluster1")
-			Expect(testEnv.Create(context.Background(), cluster)).To(Succeed())
-
-			machine := newMachine(cluster, "my-machine")
-			Expect(testEnv.Create(context.Background(), machine)).To(Succeed())
-
-			config := newEKSConfig(machine, "my-machine-config")
-			Expect(testEnv.Create(context.Background(), config)).To(Succeed())
+			scope := &EKSConfigScope{
+				Logger:      log.Log,
+				Config:      &bootstrapv1.EKSConfig{},
+				ConfigOwner: &util.ConfigOwner{},
+				Cluster:     &clusterv1.Cluster{},
+			}
 
 			reconciler := EKSConfigReconciler{
 				Log:    log.Log,
 				Client: testEnv,
 			}
+
 			By("Calling reconcile should requeue")
-			result, err := reconciler.Reconcile(ctrl.Request{
-				NamespacedName: client.ObjectKey{
-					Namespace: "default",
-					Name:      "my-machine-config",
-				},
-			})
+			result, err := reconciler.joinWorker(context.Background(), scope)
 			Expect(err).To(Succeed())
 			Expect(result.Requeue).To(BeFalse())
 		})
