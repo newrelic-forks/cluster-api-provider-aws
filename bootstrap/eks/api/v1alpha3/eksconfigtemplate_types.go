@@ -28,6 +28,13 @@ type EKSConfigTemplateSpec struct {
 	Template EKSConfigTemplateResource `json:"template"`
 }
 
+// EKSConfigTemplateStatus defines the observed state of EKSConfigTemplate
+type EKSConfigTemplateStatus struct {
+	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
+	// Important: Run "make" to regenerate code after modifying this file
+	Template EKSConfigTemplateResource `json:"template"`
+}
+
 // EKSConfigTemplateResource defines the Template structure
 type EKSConfigTemplateResource struct {
 	Spec EKSConfigSpec `json:"spec,omitempty"`
@@ -42,7 +49,8 @@ type EKSConfigTemplate struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec EKSConfigTemplateSpec `json:"spec,omitempty"`
+	Spec   EKSConfigTemplateSpec   `json:"spec,omitempty"`
+	Status EKSConfigTemplateStatus `json:"status,omitempty"`
 }
 
 // +kubebuilder:object:root=true
