@@ -43,8 +43,7 @@ spec:
                       kubeletExtraArgs:
                         additionalProperties:
                           type: string
-                        description: Passes the kubelet args into the EKS bootstrap
-                          script
+                        description: Passes the kubelet args into the EKS bootstrap script
                         type: object
                     type: object
                 type: object
