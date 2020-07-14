@@ -92,4 +92,3 @@ func (c *EKSConfig) GetConditions() clusterv1.Conditions {
 func (c *EKSConfig) SetConditions(conditions clusterv1.Conditions) {
 	c.Status.Conditions = conditions
 }
-
