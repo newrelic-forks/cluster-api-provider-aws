@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-	http://www.apache.org/licenses/LICENSE-2.0
+    http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -21,10 +21,10 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/cluster-api-provider-aws/test/helpers"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
+	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 func TestEKSConfigReconciler_ReturnEarlyIfClusterInfraNotReady(t *testing.T) {
@@ -64,7 +64,7 @@ func TestEKSConfigReconciler_ReturnEarlyIfClusterControlPlaneNotInitialized(t *t
 	config := newEKSConfig(machine, "cfg")
 
 	cluster.Status = clusterv1.ClusterStatus{
-		InfrastructureReady: true,
+		InfrastructureReady:     true,
 		ControlPlaneInitialized: false,
 	}
 
