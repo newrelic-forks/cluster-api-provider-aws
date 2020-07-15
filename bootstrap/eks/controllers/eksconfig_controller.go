@@ -27,6 +27,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/pointer"
+	"sigs.k8s.io/cluster-api/util/conditions"
+	"sigs.k8s.io/cluster-api/util/patch"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -123,7 +125,13 @@ func (r *EKSConfigReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, rerr e
 
 	// set up defer block for updating config
 	defer func() {
-		// TODO: update status conditions
+		conditions.SetSummary(config,
+			conditions.WithConditions(
+				bootstrapv1.DataSecretAvailableCondition,
+			),
+			conditions.WithStepCounter(),
+		)
+
 		patchOpts := []patch.Option{}
 		if rerr == nil {
 			patchOpts = append(patchOpts, patch.WithStatusObservedGeneration{})
@@ -143,17 +151,22 @@ func (r *EKSConfigReconciler) joinWorker(ctx context.Context, scope *EKSConfigSc
 
 	if !scope.Cluster.Status.InfrastructureReady {
 		scope.Logger.Info("Cluster infrastructure is not ready, requeueing")
-		// TODO: set condition
+		conditions.MarkFalse(config,
+			bootstrapv1.DataSecretAvailableCondition,
+			bootstrapv1.WaitingForClusterInfrastructureReason,
+			clusterv1.ConditionSeverityInfo, "")
 		return ctrl.Result{}, nil
 	}
 
 	if !scope.Cluster.Status.ControlPlaneInitialized {
 		scope.Logger.Info("Cluster has not yet been initialized, requeueing")
-		// TODO? set condition
+		conditions.MarkFalse(scope.Config, bootstrapv1.DataSecretAvailableCondition, bootstrapv1.DataSecretGenerationFailedReason, clusterv1.ConditionSeverityWarning, err.Error())
 		return ctrl.Result{}, nil
 	}
 
-	// generate userdata
+	scope.Config.Status.Ready = true
+
+	conditions.MarkTrue(scope.Config, bootstrapv1.DataSecretAvailableCondition)
 	userDataScript, err := userdata.NewNode(&userdata.NodeInput{
 		ClusterName: scope.Cluster.ClusterName,
 	})
