@@ -87,7 +87,11 @@ func (s *Service) reconcileCluster(ctx context.Context) error {
 	}
 
 	if err := s.reconcileClusterVersion(ctx, cluster); err != nil {
-		return errors.Wrap(err, "failed reconciling cluster versions")
+		return errors.Wrap(err, "failed reconciling cluster version")
+	}
+
+	if err := s.reconcileClusterConfig(cluster); err != nil {
+		return errors.Wrap(err, "failed reconciling cluster config")
 	}
 
 	return nil
@@ -168,7 +172,7 @@ func (s *Service) deleteClusterAndWait(cluster *eks.Cluster) error {
 	return nil
 }
 
-func makeEksLogging(loggingSpec map[string]bool) eks.Logging {
+func makeEksLogging(loggingSpec map[string]bool) *eks.Logging {
 	var on = true
 	var off = false
 	enabled := eks.LogSetup{Enabled: &on}
@@ -181,14 +185,19 @@ func makeEksLogging(loggingSpec map[string]bool) eks.Logging {
 			disabled.Types = append(disabled.Types, &loggingKey)
 		}
 	}
-	logging := eks.Logging{}
+	var clusterLogging []*eks.LogSetup
 	if len(enabled.Types) > 0 {
-		logging.ClusterLogging = append(logging.ClusterLogging, &enabled)
+		clusterLogging = append(clusterLogging, &enabled)
 	}
 	if len(disabled.Types) > 0 {
-		logging.ClusterLogging = append(logging.ClusterLogging, &disabled)
+		clusterLogging = append(clusterLogging, &disabled)
 	}
-	return logging
+	if len(clusterLogging) > 0 {
+		return &eks.Logging{
+			ClusterLogging: clusterLogging,
+		}
+	}
+	return nil
 }
 
 func (s *Service) createCluster() (*eks.Cluster, error) {
@@ -235,7 +244,7 @@ func (s *Service) createCluster() (*eks.Cluster, error) {
 		Name: &s.scope.Cluster.Name,
 		//ClientRequestToken: aws.String(uuid.New().String()),
 		Version: aws.String(version),
-		Logging: &logging,
+		Logging: logging,
 		ResourcesVpcConfig: &eks.VpcConfigRequest{
 			SubnetIds: subnetIds,
 		},
@@ -280,6 +289,46 @@ func (s *Service) waitForClusterActive() (*eks.Cluster, error) {
 	}
 
 	return cluster, nil
+}
+
+func (s *Service) reconcileClusterConfig(cluster *eks.Cluster) error {
+	var needsUpdate bool
+	input := eks.UpdateClusterConfigInput{Name: cluster.Name}
+
+	if updateLogging := s.reconcileLogging(cluster.Logging); updateLogging != nil {
+		needsUpdate = true
+		input.Logging = updateLogging
+	}
+
+	if needsUpdate {
+		if err := input.Validate(); err != nil {
+			return errors.Wrap(err, "created invalid UpdateClusterConfigInput")
+		}
+		if err := wait.WaitForWithRetryable(wait.NewBackoff(), func() (bool, error) {
+			if _, err := s.EKSClient.UpdateClusterConfig(&input); err != nil {
+				if aerr, ok := err.(awserr.Error); ok {
+					return false, aerr
+				}
+				return false, err
+			}
+			return true, nil
+		}); err != nil {
+			record.Warnf(s.scope.ControlPlane, "FailedUpdateEKSControlPlane", "failed to update the EKS control plane: %v", err)
+			return errors.Wrapf(err, "failed to update EKS cluster")
+		}
+	}
+	return nil
+}
+
+func (s *Service) reconcileLogging(logging *eks.Logging) *eks.Logging {
+	for _, logSetup := range logging.ClusterLogging {
+		for _, l := range logSetup.Types {
+			if enabled, ok := s.scope.ControlPlane.Spec.Logging[*l]; ok && enabled != *logSetup.Enabled {
+				return makeEksLogging(s.scope.ControlPlane.Spec.Logging)
+			}
+		}
+	}
+	return nil
 }
 
 func (s *Service) reconcileClusterVersion(_ context.Context, cluster *eks.Cluster) error {
