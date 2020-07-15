@@ -139,6 +139,9 @@ func (s *Service) deleteCluster() error {
 		}
 		return errors.Wrap(err, "unable to describe eks cluster")
 	}
+	if cluster == nil {
+		return nil
+	}
 
 	err = s.deleteClusterAndWait(cluster)
 	if err != nil {
