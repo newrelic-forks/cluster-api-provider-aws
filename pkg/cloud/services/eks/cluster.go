@@ -174,10 +174,11 @@ func makeEksLogging(loggingSpec map[string]bool) eks.Logging {
 	enabled := eks.LogSetup{Enabled: &on}
 	disabled := eks.LogSetup{Enabled: &off}
 	for k, v := range loggingSpec {
+		loggingKey := k
 		if v {
-			enabled.Types = append(enabled.Types, &k)
+			enabled.Types = append(enabled.Types, &loggingKey)
 		} else {
-			disabled.Types = append(disabled.Types, &k)
+			disabled.Types = append(disabled.Types, &loggingKey)
 		}
 	}
 	logging := eks.Logging{}
@@ -213,11 +214,13 @@ func (s *Service) createCluster() (*eks.Cluster, error) {
 
 	// Make sure to use the MachineScope here to get the merger of AWSCluster and AWSMachine tags
 	additionalTags := s.scope.AdditionalTags()
+
 	// Set the cloud provider tag
 	additionalTags[infrav1.ClusterAWSCloudProviderTagKey(s.scope.Name())] = string(infrav1.ResourceLifecycleOwned)
 	tags := make(map[string]*string)
 	for k, v := range additionalTags {
-		tags[k] = &v
+		tagValue := v
+		tags[k] = &tagValue
 	}
 
 	version := strings.Replace(*s.scope.ControlPlane.Spec.Version, "v", "", -1)
@@ -279,7 +282,7 @@ func (s *Service) waitForClusterActive() (*eks.Cluster, error) {
 	return cluster, nil
 }
 
-func (s *Service) reconcileClusterVersion(ctx context.Context, cluster *eks.Cluster) error {
+func (s *Service) reconcileClusterVersion(_ context.Context, cluster *eks.Cluster) error {
 	specVersion := version.MustParseGeneric(*s.scope.ControlPlane.Spec.Version)
 	clusterVersion := version.MustParseGeneric(*cluster.Version)
 	if clusterVersion.LessThan(specVersion) {
@@ -292,7 +295,7 @@ func (s *Service) reconcileClusterVersion(ctx context.Context, cluster *eks.Clus
 		}
 
 		if err := wait.WaitForWithRetryable(wait.NewBackoff(), func() (bool, error) {
-			if _, err := s.scope.EKS.UpdateClusterVersion(input); err != nil {
+			if _, err := s.EKSClient.UpdateClusterVersion(input); err != nil {
 				if aerr, ok := err.(awserr.Error); ok {
 					return false, aerr
 				}
