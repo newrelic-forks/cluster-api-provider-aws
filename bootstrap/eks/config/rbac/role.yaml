@@ -7,6 +7,17 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - update
+  - watch
+- apiGroups:
   - bootstrap.cluster.x-k8s.io
   resources:
   - eksconfigs
@@ -26,3 +37,22 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - cluster.x-k8s.io
+  resources:
+  - clusters
+  - machinepools
+  - machines
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - infrastructure.cluster.x-k8s.io
+  resources:
+  - awsclusters
+  - awsmanagedclusters
+  verbs:
+  - get
+  - list
+  - watch
