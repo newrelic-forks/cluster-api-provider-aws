@@ -243,7 +243,7 @@ func (s *ClusterScope) ControllerName() string {
 	return s.controllerName
 }
 
-// IsManagedControlPlaneOwned retuns true if the cluster has a EKS control plane
+// IsManagedControlPlaneOwned returns true if the cluster has a EKS control plane
 func (s *ClusterScope) IsManagedControlPlaneOwned() bool {
 	ref := s.Cluster.Spec.ControlPlaneRef
 	if ref.Kind == "AWSManagedControlPlane" && ref.APIVersion == infrav1exp.GroupVersion.String() {
