@@ -71,12 +71,12 @@ type EKSConfig struct {
 	Status EKSConfigStatus `json:"status,omitempty"`
 }
 
-func (c *EKSConfig) GetConditions() clusterv1.Conditions {
-	return c.Status.Conditions
+func (r *EKSConfig) GetConditions() clusterv1.Conditions {
+	return r.Status.Conditions
 }
 
-func (c *EKSConfig) SetConditions(conditions clusterv1.Conditions) {
-	c.Status.Conditions = conditions
+func (r *EKSConfig) SetConditions(conditions clusterv1.Conditions) {
+	r.Status.Conditions = conditions
 }
 
 // +kubebuilder:object:root=true
