@@ -17,7 +17,7 @@ limitations under the License.
 package userdata
 
 const argsTemplate = `{{- define "args" -}}
-{{- if . }} --kubelet-extra-args="{{ template "kubeletArgsTemplate" . }}"
+{{- if . }} --kubelet-extra-args '{{ template "kubeletArgsTemplate" . }}'
 {{- end -}}
 {{- end -}}`
 

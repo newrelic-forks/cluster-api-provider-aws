@@ -60,7 +60,7 @@ func TestNewNode(t *testing.T) {
 				},
 			},
 			expectedBytes: []byte(`#!/bin/bash
-/etc/eks/bootstrap.sh test-cluster --kubelet-extra-args="--foo=bar --pizza-topping=pepperoni"
+/etc/eks/bootstrap.sh test-cluster --kubelet-extra-args '--foo=bar --pizza-topping=pepperoni'
 `),
 			expectErr: false,
 		},

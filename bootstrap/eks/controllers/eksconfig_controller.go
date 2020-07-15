@@ -37,8 +37,6 @@ import (
 	bsutil "sigs.k8s.io/cluster-api/bootstrap/util"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/annotations"
-	"sigs.k8s.io/cluster-api/util/conditions"
-	"sigs.k8s.io/cluster-api/util/patch"
 
 	bootstrapv1 "sigs.k8s.io/cluster-api-provider-aws/bootstrap/eks/api/v1alpha3"
 	"sigs.k8s.io/cluster-api-provider-aws/bootstrap/eks/internal/userdata"
@@ -60,6 +58,9 @@ type EKSConfigScope struct {
 
 // +kubebuilder:rbac:groups=bootstrap.cluster.x-k8s.io,resources=eksconfigs,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=bootstrap.cluster.x-k8s.io,resources=eksconfigs/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=awsclusters;awsmanagedclusters,verbs=get;list;watch;
+// +kubebuilder:rbac:groups=cluster.x-k8s.io,resources=machines;machinepools;clusters,verbs=get;list;watch;
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;delete;
 
 func (r *EKSConfigReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, rerr error) {
 	ctx := context.Background()
@@ -151,7 +152,7 @@ func (r *EKSConfigReconciler) joinWorker(ctx context.Context, scope *EKSConfigSc
 
 	if !scope.Cluster.Status.InfrastructureReady {
 		scope.Logger.Info("Cluster infrastructure is not ready, requeueing")
-		conditions.MarkFalse(config,
+		conditions.MarkFalse(scope.Config,
 			bootstrapv1.DataSecretAvailableCondition,
 			bootstrapv1.WaitingForClusterInfrastructureReason,
 			clusterv1.ConditionSeverityInfo, "")
@@ -160,12 +161,15 @@ func (r *EKSConfigReconciler) joinWorker(ctx context.Context, scope *EKSConfigSc
 
 	if !scope.Cluster.Status.ControlPlaneInitialized {
 		scope.Logger.Info("Cluster has not yet been initialized, requeueing")
-		conditions.MarkFalse(scope.Config, bootstrapv1.DataSecretAvailableCondition, bootstrapv1.DataSecretGenerationFailedReason, clusterv1.ConditionSeverityWarning, err.Error())
+		conditions.MarkFalse(scope.Config, bootstrapv1.DataSecretAvailableCondition, bootstrapv1.DataSecretGenerationFailedReason, clusterv1.ConditionSeverityWarning, "")
 		return ctrl.Result{}, nil
 	}
 
+	scope.Logger.Info("generating userdata", "cluster", scope.Cluster.GetName())
+
+	// generate userdata
 	userDataScript, err := userdata.NewNode(&userdata.NodeInput{
-		ClusterName:      scope.Cluster.ClusterName,
+		ClusterName:      scope.Cluster.GetName(),
 		KubeletExtraArgs: scope.Config.Spec.KubeletExtraArgs,
 	})
 	if err != nil {

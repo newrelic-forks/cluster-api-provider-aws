@@ -91,11 +91,3 @@ type EKSConfigList struct {
 func init() {
 	SchemeBuilder.Register(&EKSConfig{}, &EKSConfigList{})
 }
-
-func (c *EKSConfig) GetConditions() clusterv1.Conditions {
-	return c.Status.Conditions
-}
-
-func (c *EKSConfig) SetConditions(conditions clusterv1.Conditions) {
-	c.Status.Conditions = conditions
-}

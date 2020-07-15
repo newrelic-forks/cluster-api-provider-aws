@@ -39,6 +39,7 @@ import (
 	eksbootstrapv1alpha3 "sigs.k8s.io/cluster-api-provider-aws/bootstrap/eks/api/v1alpha3"
 	eksbootstrapcontrollers "sigs.k8s.io/cluster-api-provider-aws/bootstrap/eks/controllers"
 	"sigs.k8s.io/cluster-api-provider-aws/version"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -51,6 +52,7 @@ func init() {
 	klog.InitFlags(nil)
 
 	_ = clientgoscheme.AddToScheme(scheme)
+	_ = clusterv1.AddToScheme(scheme)
 	_ = eksbootstrapv1alpha3.AddToScheme(scheme)
 	// +kubebuilder:scaffold:scheme
 }
