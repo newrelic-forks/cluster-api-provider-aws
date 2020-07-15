@@ -164,9 +164,6 @@ func (r *EKSConfigReconciler) joinWorker(ctx context.Context, scope *EKSConfigSc
 		return ctrl.Result{}, nil
 	}
 
-	scope.Config.Status.Ready = true
-
-	conditions.MarkTrue(scope.Config, bootstrapv1.DataSecretAvailableCondition)
 	userDataScript, err := userdata.NewNode(&userdata.NodeInput{
 		ClusterName: scope.Cluster.ClusterName,
 	})
@@ -227,7 +224,6 @@ func (r *EKSConfigReconciler) storeBootstrapData(ctx context.Context, scope *EKS
 	}
 	scope.Config.Status.DataSecretName = pointer.StringPtr(secret.Name)
 	scope.Config.Status.Ready = true
-
 	conditions.MarkTrue(scope.Config, bootstrapv1.DataSecretAvailableCondition)
 	return nil
 }
