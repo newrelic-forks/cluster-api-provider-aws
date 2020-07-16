@@ -19,6 +19,7 @@ package eks
 import (
 	"context"
 	"fmt"
+	"net"
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -210,10 +211,19 @@ func makeVpcConfig(subnets infrav1.Subnets, endpointAccess infrav1exp.EndpointAc
 		subnetIds = append(subnetIds, &subnet.ID)
 	}
 
+	cidrs := make([]*string, 0)
+	for _, cidr := range endpointAccess.PublicCIDRs {
+		_, ipNet, err := net.ParseCIDR(*cidr)
+		if err != nil {
+			return nil, errors.Wrap(err, "couldn't parse PublicCIDRs")
+		}
+		parsedCIDR := ipNet.String()
+		cidrs = append(cidrs, &parsedCIDR)
+	}
 	return &eks.VpcConfigRequest{
 		EndpointPublicAccess:  endpointAccess.Public,
 		EndpointPrivateAccess: endpointAccess.Private,
-		PublicAccessCidrs:     endpointAccess.PublicCIDRs,
+		PublicAccessCidrs:     cidrs,
 		SubnetIds:             subnetIds,
 	}, nil
 }
