@@ -220,6 +220,7 @@ func makeVpcConfig(subnets infrav1.Subnets, endpointAccess infrav1exp.EndpointAc
 		parsedCIDR := ipNet.String()
 		cidrs = append(cidrs, &parsedCIDR)
 	}
+<<<<<<< HEAD
 
 	vpcConfig := &eks.VpcConfigRequest{
 		EndpointPublicAccess:  endpointAccess.Public,
@@ -235,6 +236,17 @@ func makeVpcConfig(subnets infrav1.Subnets, endpointAccess infrav1exp.EndpointAc
 }
 
 func makeEksLogging(loggingSpec *infrav1exp.ControlPlaneLoggingSpec) *eks.Logging {
+=======
+	return &eks.VpcConfigRequest{
+		EndpointPublicAccess:  endpointAccess.Public,
+		EndpointPrivateAccess: endpointAccess.Private,
+		PublicAccessCidrs:     cidrs,
+		SubnetIds:             subnetIds,
+	}, nil
+}
+
+func makeEksLogging(loggingSpec map[string]bool) *eks.Logging {
+>>>>>>> 51e94df6... Add public/private endpoint access support
 	var on = true
 	var off = false
 	enabled := eks.LogSetup{Enabled: &on}
