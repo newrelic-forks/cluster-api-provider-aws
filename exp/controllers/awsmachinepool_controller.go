@@ -29,17 +29,28 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/aws/aws-sdk-go/service/autoscaling"
 	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
 	infrav1alpha3 "sigs.k8s.io/cluster-api-provider-aws/exp/api/v1alpha3"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/scope"
+	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/services"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/services/ec2"
 )
 
 // AWSMachinePoolReconciler reconciles a AWSMachinePool object
 type AWSMachinePoolReconciler struct {
 	client.Client
-	Log    logr.Logger
-	Scheme *runtime.Scheme
+	Log               logr.Logger
+	Scheme            *runtime.Scheme
+	asgServiceFactory func(*scope.ClusterScope) services.ASGMachineInterface
+}
+
+func (r *AWSMachinePoolReconciler) getASGservice(scope *scope.ClusterScope) services.ASGMachineInterface {
+	if r.asgServiceFactory != nil {
+		return r.asgServiceFactory(scope)
+	}
+
+	return autoscaling.NewService(scope)
 }
 
 // +kubebuilder:rbac:groups=exp.infrastructure.cluster.x-k8s.io,resources=awsmachinepools,verbs=get;list;watch;create;update;patch;delete
@@ -109,11 +120,11 @@ func (r *AWSMachinePoolReconciler) createPool(machinePoolScope *scope.MachinePoo
 
 func (r *AWSMachinePoolReconciler) findASG(machinePoolScope *scope.MachinePoolScope, clusterScope *scope.ClusterScope) (infrav1.AutoScalingGroup, error) {
 	clusterScope.Info("Handling things")
+	//TODO: I don't understand this comment yet lol \/
 	// if instance is nil
 	//   createPool() (both launch template and ASG)
 	// else
 	//   updatePool()
-	// TODO: I need some help understanding this comment ^  and how it fits with the findASG func
 
 	// Parse the ProviderID
 	pid, err := noderefutil.NewProviderID(machinePoolScope.GetProviderID())
@@ -123,7 +134,7 @@ func (r *AWSMachinePoolReconciler) findASG(machinePoolScope *scope.MachinePoolSc
 
 	// If the ProviderID is populated, describe the instance using the ID.
 	if err == nil {
-		instance, err := asgsvc.InstanceIfExists(pointer.StringPtr(pid.ID()))
+		instance, err := asgsvc.AsgIfExists(pointer.StringPtr(pid.ID()))
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to query AWSMachine instance")
 		}

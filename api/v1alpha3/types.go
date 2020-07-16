@@ -651,3 +651,11 @@ type RootVolume struct {
 	// +optional
 	EncryptionKey string `json:"encryptionKey,omitempty"`
 }
+
+// AutoScalingGroup describes an AWS autoscaling group.
+type AutoScalingGroup struct {
+	ID string `json:"id"`
+
+	// The tags associated with the instance.
+	Tags map[string]string `json:"tags,omitempty"`
+}

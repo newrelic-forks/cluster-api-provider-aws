@@ -21,6 +21,12 @@ import (
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/scope"
 )
 
+// ASGMachineInterface encapsulates the methods exposed to the machinepool
+// actuator
+type ASGMachineInterface interface {
+	AsgIfExists(id *string) (*infrav1.AutoScalingGroup, error)
+}
+
 // EC2MachineInterface encapsulates the methods exposed to the machine
 // actuator
 type EC2MachineInterface interface {
