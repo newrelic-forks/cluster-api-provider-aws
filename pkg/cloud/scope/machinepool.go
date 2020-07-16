@@ -16,7 +16,18 @@ limitations under the License.
 
 package scope
 
-// MachineScope defines a scope defined around a machine and its cluster.
+import infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
+
+// MachinePoolScope defines a scope defined around a machine and its cluster.
 type MachinePoolScope struct {
-	name string
+	name       string
+	AWSMachine *infrav1.AWSMachine
+}
+
+// GetProviderID returns the AWSMachine providerID from the spec.
+func (m *MachinePoolScope) GetProviderID() string {
+	if m.AWSMachine.Spec.ProviderID != nil {
+		return *m.AWSMachine.Spec.ProviderID
+	}
+	return ""
 }

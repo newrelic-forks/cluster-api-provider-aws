@@ -19,8 +19,12 @@ package controllers
 import (
 	"context"
 
+	"sigs.k8s.io/cluster-api/controllers/noderefutil"
+
 	"github.com/go-logr/logr"
+	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/utils/pointer"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -103,12 +107,28 @@ func (r *AWSMachinePoolReconciler) createPool(machinePoolScope *scope.MachinePoo
 	return ctrl.Result{}, nil
 }
 
-func (r *AWSMachinePoolReconciler) findASG(machinePoolScope *scope.MachinePoolScope, clusterScope *scope.ClusterScope) (ctrl.Result, error) {
+func (r *AWSMachinePoolReconciler) findASG(machinePoolScope *scope.MachinePoolScope, clusterScope *scope.ClusterScope) (infrav1.AutoScalingGroup, error) {
 	clusterScope.Info("Handling things")
 	// if instance is nil
 	//   createPool() (both launch template and ASG)
 	// else
 	//   updatePool()
+	// TODO: I need some help understanding this comment ^  and how it fits with the findASG func
+
+	// Parse the ProviderID
+	pid, err := noderefutil.NewProviderID(machinePoolScope.GetProviderID())
+	if err != nil && err != noderefutil.ErrEmptyProviderID {
+		return nil, errors.Wrapf(err, "failed to parse Spec.ProviderID")
+	}
+
+	// If the ProviderID is populated, describe the instance using the ID.
+	if err == nil {
+		instance, err := asgsvc.InstanceIfExists(pointer.StringPtr(pid.ID()))
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to query AWSMachine instance")
+		}
+		return instance, nil
+	}
 
 	return ctrl.Result{}, nil
 }
