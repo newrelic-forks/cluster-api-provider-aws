@@ -29,11 +29,11 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/aws/aws-sdk-go/service/autoscaling"
 	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
 	infrav1alpha3 "sigs.k8s.io/cluster-api-provider-aws/exp/api/v1alpha3"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/scope"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/services"
+	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/services/asg"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/services/ec2"
 )
 
@@ -49,8 +49,7 @@ func (r *AWSMachinePoolReconciler) getASGservice(scope *scope.ClusterScope) serv
 	if r.asgServiceFactory != nil {
 		return r.asgServiceFactory(scope)
 	}
-
-	return autoscaling.NewService(scope)
+	return asg.NewService(scope)
 }
 
 // +kubebuilder:rbac:groups=exp.infrastructure.cluster.x-k8s.io,resources=awsmachinepools,verbs=get;list;watch;create;update;patch;delete
@@ -96,6 +95,7 @@ func (r *AWSMachinePoolReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 func (r *AWSMachinePoolReconciler) reconcileNormal(machinePoolScope *scope.MachinePoolScope, clusterScope *scope.ClusterScope) (ctrl.Result, error) {
 	clusterScope.Info("Handling things")
+	asgsvc := r.getASGService(clusterScope)
 
 	// Update or create
 	// findASG()
@@ -118,8 +118,8 @@ func (r *AWSMachinePoolReconciler) createPool(machinePoolScope *scope.MachinePoo
 	return ctrl.Result{}, nil
 }
 
-func (r *AWSMachinePoolReconciler) findASG(machinePoolScope *scope.MachinePoolScope, clusterScope *scope.ClusterScope) (infrav1.AutoScalingGroup, error) {
-	clusterScope.Info("Handling things")
+func (r *AWSMachinePoolReconciler) findASG(machinePoolScope *scope.MachinePoolScope, clusterScope *scope.ClusterScope) (*infrav1.AutoScalingGroup, error) {
+	clusterScope.Info("Finding ASG")
 	//TODO: I don't understand this comment yet lol \/
 	// if instance is nil
 	//   createPool() (both launch template and ASG)
@@ -132,14 +132,20 @@ func (r *AWSMachinePoolReconciler) findASG(machinePoolScope *scope.MachinePoolSc
 		return nil, errors.Wrapf(err, "failed to parse Spec.ProviderID")
 	}
 
-	// If the ProviderID is populated, describe the instance using the ID.
+	// If the ProviderID is populated, describe the ASG using the ID.
 	if err == nil {
-		instance, err := asgsvc.AsgIfExists(pointer.StringPtr(pid.ID()))
+		asg, err := asgsvc.AsgIfExists(pointer.StringPtr(pid.ID()))
 		if err != nil {
-			return nil, errors.Wrapf(err, "failed to query AWSMachine instance")
+			return nil, errors.Wrapf(err, "failed to query AWSMachinePool")
 		}
-		return instance, nil
+		return asg, nil
 	}
 
-	return ctrl.Result{}, nil
+	// If the ProviderID is empty, try to query the instance using tags.
+	asg, err := asgsvc.GetRunningAsgByTags(scope)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to query AWSMachine instance by tags")
+	}
+
+	return asg, nil
 }

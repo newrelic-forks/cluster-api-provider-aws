@@ -17,38 +17,79 @@ limitations under the License.
 package asg
 
 import (
-	"github.com/aws/aws-sdk-go/service/ec2"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/service/autoscaling"
 	"github.com/pkg/errors"
 	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/awserrors"
+	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/scope"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/record"
 )
 
+// SDKToAugoScalingGroup converts an AWS EC2 SDK AugoScalingGroup to the CAPA AugoScalingGroup type.
+// SDKToAugoScalingGroup populates all AugoScalingGroup fields
+func (s *Service) SDKToAutoScalingGroup(v *autoscaling.Group) (*infrav1.AutoScalingGroup, error) {
+	i := &infrav1.AutoScalingGroup{
+		ID: aws.StringValue(v.AutoScalingGroupName),
+	}
+
+	return i, nil
+}
+
+//TODO: SDKToAutoScalingGroupInstance probably needs to be done as well
+// func (s *Service) SDKToAutoScalingGroupInstance(v *autoscaling.Instance) (*infrav1.AutoScalingGroup, error) {
+// 	i := &infrav1.AutoScalingGroupInstance
+// 		ID: aws.StringValue(v.AutoScalingGroupName),
+// 	}
+// 	// Will likely be similar to SDKToInstance
+
+// 	return i, nil
+// }
+
 // AsgIfExists returns the existing autoscaling group or nothing if it doesn't exist.
-func (s *Service) AsgIfExists(id *string) (*infrav1.AutoScalingGroup, error) {
-	if id == nil {
-		s.scope.Info("Instance does not have an instance id")
+func (s *Service) AsgIfExists(name *string) (*infrav1.AutoScalingGroup, error) {
+	if name == nil {
+		s.scope.Info("Autoscaling Group does not have a name")
 		return nil, nil
 	}
 
-	s.scope.V(2).Info("Looking for instance by id", "instance-id", *id)
+	s.scope.V(2).Info("Looking for asg by name", "name", *name)
 
-	input := &ec2.DescribeInstancesInput{
-		InstanceIds: []*string{id},
+	input := &autoscaling.DescribeAutoScalingGroupsInput{
+		AutoScalingGroupNames: []*string{name},
 	}
 
-	out, err := s.scope.EC2.DescribeInstances(input)
+	out, err := s.scope.ASG.DescribeAutoScalingGroups(input)
 	switch {
 	case awserrors.IsNotFound(err):
 		return nil, nil
 	case err != nil:
-		record.Eventf(s.scope.AWSCluster, "FailedDescribeInstances", "failed to describe instance %q: %v", *id, err)
-		return nil, errors.Wrapf(err, "failed to describe instance: %q", *id)
+		record.Eventf(s.scope.AWSCluster, "FailedDescribeAutoScalingGroups", "failed to describe ASG %q: %v", *name, err)
+		return nil, errors.Wrapf(err, "failed to describe AutoScaling Group: %q", *name)
+	}
+	//TODO: double check if you're handling nil vals
+	return s.SDKToAutoScalingGroup(out.AutoScalingGroups[0])
+
+}
+
+// GetRunningAsgByName returns the existing ASG or nothing if it doesn't exist.
+func (s *Service) GetRunningAsgByName(scope *scope.MachinePoolScope) (*infrav1.AutoScalingGroup, error) {
+	s.scope.V(2).Info("Looking for existing machine instance by tags")
+
+	input := &autoscaling.DescribeAutoScalingGroupsInput{
+		AutoScalingGroupNames: []*string{
+			aws.String(scope.Name),
+		},
 	}
 
-	if len(out.Reservations) > 0 && len(out.Reservations[0].Instances) > 0 {
-		return s.SDKToInstance(out.Reservations[0].Instances[0])
+	out, err := s.scope.ASG.DescribeAutoScalingGroups(input)
+	switch {
+	case awserrors.IsNotFound(err):
+		return nil, nil
+	case err != nil:
+		record.Eventf(s.scope.AWSCluster, "FailedDescribeInstances", "Failed to describe instances by tags: %v", err)
+		return nil, errors.Wrap(err, "failed to describe instances by tags")
 	}
 
-	return nil, nil
+	return s.SDKToAutoScalingGroup(out.AutoScalingGroups[0])
 }

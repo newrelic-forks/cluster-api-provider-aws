@@ -20,7 +20,7 @@ import infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
 
 // MachinePoolScope defines a scope defined around a machine and its cluster.
 type MachinePoolScope struct {
-	name       string
+	Name       string
 	AWSMachine *infrav1.AWSMachine
 }
 
