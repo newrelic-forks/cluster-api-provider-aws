@@ -45,7 +45,7 @@ type AWSMachinePoolReconciler struct {
 	asgServiceFactory func(*scope.ClusterScope) services.ASGMachineInterface
 }
 
-func (r *AWSMachinePoolReconciler) getASGservice(scope *scope.ClusterScope) services.ASGMachineInterface {
+func (r *AWSMachinePoolReconciler) getASGService(scope *scope.ClusterScope) services.ASGMachineInterface {
 	if r.asgServiceFactory != nil {
 		return r.asgServiceFactory(scope)
 	}
@@ -55,6 +55,7 @@ func (r *AWSMachinePoolReconciler) getASGservice(scope *scope.ClusterScope) serv
 // +kubebuilder:rbac:groups=exp.infrastructure.cluster.x-k8s.io,resources=awsmachinepools,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=exp.infrastructure.cluster.x-k8s.io,resources=awsmachinepools/status,verbs=get;update;patch
 
+// Reconcile TODO: add comment bc exported
 func (r *AWSMachinePoolReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	_ = context.Background()
 	_ = r.Log.WithValues("awsmachinepool", req.NamespacedName)
@@ -94,7 +95,8 @@ func (r *AWSMachinePoolReconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 func (r *AWSMachinePoolReconciler) reconcileNormal(machinePoolScope *scope.MachinePoolScope, clusterScope *scope.ClusterScope) (ctrl.Result, error) {
-	clusterScope.Info("Handling things")
+	clusterScope.Info("Reconciling AWSMachine")
+
 	asgsvc := r.getASGService(clusterScope)
 
 	// Update or create
@@ -113,9 +115,14 @@ func (r *AWSMachinePoolReconciler) updatePool(machinePoolScope *scope.MachinePoo
 	return ctrl.Result{}, nil
 }
 
-func (r *AWSMachinePoolReconciler) createPool(machinePoolScope *scope.MachinePoolScope, clusterScope *scope.ClusterScope) (ctrl.Result, error) {
-	clusterScope.Info("Handling things")
-	return ctrl.Result{}, nil
+func (r *AWSMachinePoolReconciler) createPool(machinePoolScope *scope.MachinePoolScope, clusterScope *scope.ClusterScope, asgsvc services.ASGMachineInterface) (*infrav1.AutoScalingGroup, error) {
+	clusterScope.Info("Creating Autoscaling Group")
+	asg, err := asgsvc.CreateASG(scope)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to create AWSMachinePool")
+	}
+
+	return asg, nil
 }
 
 func (r *AWSMachinePoolReconciler) findASG(machinePoolScope *scope.MachinePoolScope, clusterScope *scope.ClusterScope) (*infrav1.AutoScalingGroup, error) {
@@ -142,9 +149,9 @@ func (r *AWSMachinePoolReconciler) findASG(machinePoolScope *scope.MachinePoolSc
 	}
 
 	// If the ProviderID is empty, try to query the instance using tags.
-	asg, err := asgsvc.GetRunningAsgByTags(scope)
+	asg, err := asgsvc.GetRunningAsgByName(scope)
 	if err != nil {
-		return nil, errors.Wrapf(err, "failed to query AWSMachine instance by tags")
+		return nil, errors.Wrapf(err, "failed to query AWSMachinePool by tags")
 	}
 
 	return asg, nil

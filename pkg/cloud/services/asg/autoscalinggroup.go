@@ -26,11 +26,12 @@ import (
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/record"
 )
 
-// SDKToAugoScalingGroup converts an AWS EC2 SDK AugoScalingGroup to the CAPA AugoScalingGroup type.
+// SDKToAutoScalingGroup converts an AWS EC2 SDK AugoScalingGroup to the CAPA AugoScalingGroup type.
 // SDKToAugoScalingGroup populates all AugoScalingGroup fields
 func (s *Service) SDKToAutoScalingGroup(v *autoscaling.Group) (*infrav1.AutoScalingGroup, error) {
 	i := &infrav1.AutoScalingGroup{
 		ID: aws.StringValue(v.AutoScalingGroupName),
+		//TODO: determine what additional values go here and what else should be in the struct
 	}
 
 	return i, nil
@@ -92,4 +93,20 @@ func (s *Service) GetRunningAsgByName(scope *scope.MachinePoolScope) (*infrav1.A
 	}
 
 	return s.SDKToAutoScalingGroup(out.AutoScalingGroups[0])
+}
+
+// CreateASG runs an autoscaling group.
+func (s *Service) CreateASG(scope *scope.MachineScope) (*infrav1.AutoScalingGroup, error) {
+	s.scope.V(2).Info("Creating an autoscaling group for a machine pool")
+
+	input := &infrav1.AutoScalingGroup{
+		AutoScalingGroupName:    "",
+		DesiredCapacity:         1,            //TODO: define elsewhere
+		LaunchConfigurationName: aws.String(), //TODO: get from mytu's code
+		MaxSize:                 5,            //TODO: Define for realsies later
+		MinSize:                 1,
+		MixedInstancesPolicy:    &MixedInstancesPolicy{},
+		PlacementGroup:          aws.String(""),
+	}
+	return nil, nil
 }

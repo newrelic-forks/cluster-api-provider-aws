@@ -25,7 +25,8 @@ import (
 // actuator
 type ASGMachineInterface interface {
 	AsgIfExists(id *string) (*infrav1.AutoScalingGroup, error)
-	GetRunningAsgByName(scope *scope.MachineScope) (*infrav1.AutoScalingGroup, error)
+	GetRunningAsgByName(scope *scope.MachinePoolScope) (*infrav1.AutoScalingGroup, error)
+	CreateASG(scope *scope.MachinePoolScope) (*infrav1.AutoScalingGroup, error)
 }
 
 // EC2MachineInterface encapsulates the methods exposed to the machine
