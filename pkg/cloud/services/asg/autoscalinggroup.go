@@ -96,17 +96,49 @@ func (s *Service) GetRunningAsgByName(scope *scope.MachinePoolScope) (*infrav1.A
 }
 
 // CreateASG runs an autoscaling group.
-func (s *Service) CreateASG(scope *scope.MachineScope) (*infrav1.AutoScalingGroup, error) {
+func (s *Service) CreateASG(scope *scope.MachinePoolScope) (*infrav1.AutoScalingGroup, error) {
 	s.scope.V(2).Info("Creating an autoscaling group for a machine pool")
 
 	input := &infrav1.AutoScalingGroup{
-		AutoScalingGroupName:    "",
-		DesiredCapacity:         1,            //TODO: define elsewhere
-		LaunchConfigurationName: aws.String(), //TODO: get from mytu's code
-		MaxSize:                 5,            //TODO: Define for realsies later
+		AutoScalingGroupName:    "nicole-testy-westy", //TODO: define dynamically - borrow logic from ec2
+		DesiredCapacity:         1,                    //TODO: define elsewhere
+		LaunchConfigurationName: "mytu-test",          //TODO: get from mytu's code, remove hard code val
+		MaxSize:                 5,                    //TODO: Define for realsies later
 		MinSize:                 1,
-		MixedInstancesPolicy:    &MixedInstancesPolicy{},
-		PlacementGroup:          aws.String(""),
+		MixedInstancesPolicy:    &autoscaling.MixedInstancesPolicy{},
 	}
+
+	// TODO: do additional tags
+	s.scope.V(2).Info("Running instance")
+	_, err := s.runPool(input) //TODO: log out for more debugging
+	if err != nil {
+		// Only record the failure event if the error is not related to failed dependencies.
+		// This is to avoid spamming failure events since the machine will be requeued by the actuator.
+		if !awserrors.IsFailedDependency(errors.Cause(err)) {
+			record.Warnf(scope.AWSMachine, "FailedCreate", "Failed to create instance: %v", err)
+		}
+		return nil, err
+	}
+	record.Eventf(scope.AWSMachine, "SuccessfulCreate", "Created new ASG: %s", scope.Name)
+
 	return nil, nil
+}
+
+func (s *Service) runPool(i *infrav1.AutoScalingGroup) (*infrav1.AutoScalingGroup, error) {
+	input := &autoscaling.CreateAutoScalingGroupInput{
+		AutoScalingGroupName:    aws.String(i.AutoScalingGroupName),
+		DesiredCapacity:         aws.Int64(i.DesiredCapacity),
+		LaunchConfigurationName: aws.String(i.LaunchConfigurationName),
+		MaxSize:                 aws.Int64(i.MaxSize),
+		MinSize:                 aws.Int64(i.MinSize),
+		MixedInstancesPolicy:    i.MixedInstancesPolicy,
+	}
+
+	_, err := s.scope.ASG.CreateAutoScalingGroup(input)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to create autoscaling group")
+	}
+	// verify ASG was created
+
+	return s.SDKToAutoScalingGroup(&autoscaling.Group{}) //TODO: fill with real one
 }
