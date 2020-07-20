@@ -36,6 +36,10 @@ type ControlPlaneLoggingSpec struct {
 
 // IsLogEnabled returns true if the log is enabled
 func (s *ControlPlaneLoggingSpec) IsLogEnabled(logName string) bool {
+	if s == nil {
+		return false
+	}
+
 	switch logName {
 	case eks.LogTypeApi:
 		return s.APIServer
