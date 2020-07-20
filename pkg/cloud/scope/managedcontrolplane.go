@@ -137,7 +137,13 @@ func (s *ManagedControlPlaneScope) ListOptionsLabelSelector() client.ListOption 
 
 // PatchObject persists the control plane configuration and status.
 func (s *ManagedControlPlaneScope) PatchObject() error {
-	return s.patchHelper.Patch(context.TODO(), s.ControlPlane)
+	return s.patchHelper.Patch(
+		context.TODO(),
+		s.ControlPlane,
+		patch.WithOwnedConditions{Conditions: []clusterv1.ConditionType{
+			infrav1exp.EKSControlPlaneReadyCondition,
+			infrav1exp.IAMControlPlaneRolesReadyCondition,
+		}})
 }
 
 // Close closes the current scope persisting the control plane configuration and status.
