@@ -23,8 +23,6 @@ import (
 	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
 	expinfrav1 "sigs.k8s.io/cluster-api-provider-aws/exp/api/v1alpha3"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
-	expclusterv1 "sigs.k8s.io/cluster-api/exp/api/v1alpha3"
-	"sigs.k8s.io/cluster-api/util/patch"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -34,9 +32,19 @@ type MachinePoolScopeParams struct {
 	Client         client.Client
 	Logger         logr.Logger
 	Cluster        *clusterv1.Cluster
-	MachinePool    *expclusterv1.MachinePool
+	MachinePool    *expinfrav1.MachinePool //todo: why
 	AWSCluster     *infrav1.AWSCluster
 	AWSMachinePool *expinfrav1.AWSMachinePool
+}
+
+// MachinePoolScope defines a scope defined around a machine and its cluster.
+type MachinePoolScope struct {
+	AWSMachinePool *expinfrav1.AWSMachinePool
+	logr.Logger
+	client client.Client
+	// patchHelper
+	MachinePool *expinfrav1.MachinePool //TODO: why is it in cluster-api for machines?
+	AWSCluster  *infrav1.AWSCluster
 }
 
 // NewMachinePoolScope creates a new MachinePoolScope from the supplied parameters.
@@ -48,9 +56,9 @@ func NewMachinePoolScope(params MachinePoolScopeParams) (*MachinePoolScope, erro
 	if params.MachinePool == nil {
 		return nil, errors.New("machinepool is required when creating a MachinePoolScope")
 	}
-	if params.Cluster == nil {
-		return nil, errors.New("cluster is required when creating a MachinePoolScope")
-	}
+	// if params.Cluster == nil {
+	// 	return nil, errors.New("cluster is required when creating a MachinePoolScope")
+	// }
 	if params.AWSMachinePool == nil {
 		return nil, errors.New("aws machine pool is required when creating a MachinePoolScope")
 	}
@@ -62,32 +70,14 @@ func NewMachinePoolScope(params MachinePoolScopeParams) (*MachinePoolScope, erro
 		params.Logger = klogr.New()
 	}
 
-	helper, err := patch.NewHelper(params.AWSMachinePool, params.Client)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to init patch helper")
-	}
 	return &MachinePoolScope{
-		Logger:      params.Logger,
-		client:      params.Client,
-		patchHelper: helper,
-
-		Cluster:        params.Cluster,
+		Logger: params.Logger,
+		client: params.Client,
+		// Cluster:        params.Cluster,
 		MachinePool:    params.MachinePool,
 		AWSCluster:     params.AWSCluster,
 		AWSMachinePool: params.AWSMachinePool,
 	}, nil
-}
-
-// MachinePoolScope defines a scope defined around a machinepool and its cluster.
-type MachinePoolScope struct {
-	logr.Logger
-	client      client.Client
-	patchHelper *patch.Helper
-
-	Cluster        *clusterv1.Cluster
-	MachinePool    *expclusterv1.MachinePool
-	AWSCluster     *infrav1.AWSCluster
-	AWSMachinePool *expinfrav1.AWSMachinePool
 }
 
 // Name returns the AWSMachinePool name.
@@ -100,41 +90,10 @@ func (m *MachinePoolScope) Namespace() string {
 	return m.AWSMachinePool.Namespace
 }
 
-// MachinePoolScope defines a scope defined around a machine and its cluster.
-type MachinePoolScope struct {
-	logr.Logger
-	client     client.Client
-	Name       string
-	AWSMachine *infrav1.AWSMachine
-	// Logger
-	// client
-	// patchHelper
-
-	// Cluster:        params.Cluster,
-	// MachinePool:    params.MachinePool,
-	// AWSCluster:     params.AWSCluster,
-	AWSMachinePool *infrav1.AWSMachinePool
-}
-
-// MachinePoolScopeParams defines a scope defined around a machine and its cluster.
-type MachinePoolScopeParams struct {
-	Name       string
-	AWSMachine *infrav1.AWSMachine
-	Logger     logr.Logger
-	Client     client.Client
-	// patchHelper
-
-	// Cluster:        params.Cluster,
-	MachinePool *infrav1.MachinePool //TODO: why is it in cluster-api for machines?
-	clusterv1.Machine
-	// AWSCluster:     params.AWSCluster,
-	AWSMachinePool *infrav1.AWSMachinePool
-}
-
 // GetProviderID returns the AWSMachine providerID from the spec.
 func (m *MachinePoolScope) GetProviderID() string {
-	if m.AWSMachine.Spec.ProviderID != nil {
-		return *m.AWSMachine.Spec.ProviderID
+	if m.AWSMachinePool.Spec.ProviderID != nil {
+		return *m.AWSMachinePool.Spec.ProviderID
 	}
 	return ""
 }

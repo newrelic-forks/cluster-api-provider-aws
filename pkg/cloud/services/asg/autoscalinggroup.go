@@ -79,7 +79,7 @@ func (s *Service) GetRunningAsgByName(scope *scope.MachinePoolScope) (*infrav1.A
 
 	input := &autoscaling.DescribeAutoScalingGroupsInput{
 		AutoScalingGroupNames: []*string{
-			aws.String(scope.Name),
+			aws.String(scope.Name()),
 		},
 	}
 
@@ -115,11 +115,11 @@ func (s *Service) CreateASG(scope *scope.MachinePoolScope) (*infrav1.AutoScaling
 		// Only record the failure event if the error is not related to failed dependencies.
 		// This is to avoid spamming failure events since the machine will be requeued by the actuator.
 		if !awserrors.IsFailedDependency(errors.Cause(err)) {
-			record.Warnf(scope.AWSMachine, "FailedCreate", "Failed to create instance: %v", err)
+			record.Warnf(scope.AWSMachinePool, "FailedCreate", "Failed to create instance: %v", err)
 		}
 		return nil, err
 	}
-	record.Eventf(scope.AWSMachine, "SuccessfulCreate", "Created new ASG: %s", scope.Name)
+	record.Eventf(scope.AWSMachinePool, "SuccessfulCreate", "Created new ASG: %s", scope.Name)
 
 	return nil, nil
 }
