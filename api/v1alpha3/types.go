@@ -657,12 +657,12 @@ type RootVolume struct {
 type AutoScalingGroup struct {
 	ID string `json:"id"`
 	// The tags associated with the instance.
-	Tags                    map[string]string `json:"tags,omitempty"`
-	AutoScalingGroupName    string
-	DesiredCapacity         int64
-	LaunchConfigurationName string
-	MaxSize                 int64
-	MinSize                 int64
-	MixedInstancesPolicy    *autoscaling.MixedInstancesPolicy
-	PlacementGroup          string
+	Tags                        map[string]string `json:"tags,omitempty"`
+	AutoScalingGroupName        string
+	DesiredCapacity             int64
+	LaunchTemplateSpecification *autoscaling.LaunchTemplateSpecification
+	MaxSize                     int64
+	MinSize                     int64
+	MixedInstancesPolicy        *autoscaling.MixedInstancesPolicy
+	PlacementGroup              string
 }

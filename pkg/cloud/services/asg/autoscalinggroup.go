@@ -100,12 +100,14 @@ func (s *Service) CreateASG(scope *scope.MachinePoolScope) (*infrav1.AutoScaling
 	s.scope.V(2).Info("Creating an autoscaling group for a machine pool")
 
 	input := &infrav1.AutoScalingGroup{
-		AutoScalingGroupName:    "nicole-testy-westy", //TODO: define dynamically - borrow logic from ec2
-		DesiredCapacity:         1,                    //TODO: define elsewhere
-		LaunchConfigurationName: "mytu-test",          //TODO: get from mytu's code, remove hard code val
-		MaxSize:                 5,                    //TODO: Define for realsies later
-		MinSize:                 1,
-		MixedInstancesPolicy:    &autoscaling.MixedInstancesPolicy{},
+		AutoScalingGroupName: "nicole-testy-westy", //TODO: define dynamically - borrow logic from ec2
+		DesiredCapacity:      1,                    //TODO: define elsewhere
+		LaunchTemplateSpecification: &autoscaling.LaunchTemplateSpecification{
+			LaunchTemplateName: aws.String("mytu-test"),
+		}, //TODO: get from mytu's code, remove hard code val, get machinepool.go
+		MaxSize:              5, //TODO: Define for realsies later
+		MinSize:              1,
+		MixedInstancesPolicy: &autoscaling.MixedInstancesPolicy{},
 	}
 
 	// TODO: do additional tags
@@ -126,12 +128,12 @@ func (s *Service) CreateASG(scope *scope.MachinePoolScope) (*infrav1.AutoScaling
 
 func (s *Service) runPool(i *infrav1.AutoScalingGroup) (*infrav1.AutoScalingGroup, error) {
 	input := &autoscaling.CreateAutoScalingGroupInput{
-		AutoScalingGroupName:    aws.String(i.AutoScalingGroupName),
-		DesiredCapacity:         aws.Int64(i.DesiredCapacity),
-		LaunchConfigurationName: aws.String(i.LaunchConfigurationName),
-		MaxSize:                 aws.Int64(i.MaxSize),
-		MinSize:                 aws.Int64(i.MinSize),
-		MixedInstancesPolicy:    i.MixedInstancesPolicy,
+		AutoScalingGroupName: aws.String(i.AutoScalingGroupName),
+		DesiredCapacity:      aws.Int64(i.DesiredCapacity),
+		LaunchTemplate:       i.LaunchTemplateSpecification,
+		MaxSize:              aws.Int64(i.MaxSize),
+		MinSize:              aws.Int64(i.MinSize),
+		MixedInstancesPolicy: i.MixedInstancesPolicy,
 	}
 
 	_, err := s.scope.ASG.CreateAutoScalingGroup(input)

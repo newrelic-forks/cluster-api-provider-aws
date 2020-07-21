@@ -71,9 +71,47 @@ func (r *AWSMachinePoolReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 	logger := r.Log.WithValues("namespace", req.Namespace, "awsMachinePool", req.Name)
 
 	// Create the cluster scope
+	// clusterScope, err := scope.NewClusterScope(scope.ClusterScopeParams{
+	// 	Client:  r.Client,
+	// 	Logger:  r.Log,
+	// 	Cluster: &clusterv1.Cluster{},
+	// 	AWSCluster: &infrav1.AWSCluster{
+	// 		Spec: infrav1.AWSClusterSpec{
+	// 			Region: "us-east-1",
+	// 		},
+	// 	},
+	// })
+	// if err != nil {
+	// 	return ctrl.Result{}, err
+	// }
+
+	// machinePoolScope, err := scope.NewMachinePoolScope(scope.MachinePoolScopeParams{
+	// 	Logger: logger,
+	// 	Client: r.Client,
+	// 	// Cluster:    cluster,
+	// 	// Machine:    machine,
+	// 	// AWSCluster: awsCluster,
+	// 	// AWSMachine: awsMachinePool,
+	// })
+
+	//TODO: use this in autoscalinggroupƒ.go
+	// ec2svc := ec2.NewService(clusterScope)
+	// lt, err = ec2svc.GetLaunchTemplate("mytu-test")
+	// if err != nil {
+	// Fetch the AWSMachinePool .
+	awsMachinePool := &expinfrav1.AWSMachinePool{}
+	err := r.Get(ctx, req.NamespacedName, awsMachinePool)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return ctrl.Result{}, nil
+		}
+		return ctrl.Result{}, err
+	}
+
+	// Create the cluster scope
 	clusterScope, err := scope.NewClusterScope(scope.ClusterScopeParams{
 		Client:  r.Client,
-		Logger:  r.Log,
+		Logger:  logger,
 		Cluster: &clusterv1.Cluster{},
 		AWSCluster: &infrav1.AWSCluster{
 			Spec: infrav1.AWSClusterSpec{
@@ -85,66 +123,28 @@ func (r *AWSMachinePoolReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		return ctrl.Result{}, err
 	}
 
-	// machinePoolScope, err := scope.NewMachinePoolScope(scope.MachinePoolScopeParams{
-	// 	Logger: logger,
-	// 	Client: r.Client,
-	// 	// Cluster:    cluster,
-	// 	// Machine:    machine,
-	// 	// AWSCluster: awsCluster,
-	// 	// AWSMachine: awsMachinePool,
-	// })
-
-	ec2svc := ec2.NewService(clusterScope)
-	_, err = ec2svc.GetLaunchTemplate("mytu-test")
+	// Create the machine poolscope
+	machinePoolScope, err := scope.NewMachinePoolScope(scope.MachinePoolScopeParams{
+		Logger:      logger,
+		Client:      r.Client,
+		Cluster:     &clusterv1.Cluster{},
+		MachinePool: &expinfrav1.MachinePool{},
+		AWSCluster: &infrav1.AWSCluster{
+			Spec: infrav1.AWSClusterSpec{
+				Region: "us-east-1",
+			},
+		},
+		AWSMachinePool: awsMachinePool,
+	})
 	if err != nil {
-		// Fetch the AWSMachinePool .
-		awsMachinePool := &expinfrav1.AWSMachinePool{}
-		err := r.Get(ctx, req.NamespacedName, awsMachinePool)
-		if err != nil {
-			if apierrors.IsNotFound(err) {
-				return ctrl.Result{}, nil
-			}
-			return ctrl.Result{}, err
-		}
-
-		// Create the cluster scope
-		clusterScope, err := scope.NewClusterScope(scope.ClusterScopeParams{
-			Client:  r.Client,
-			Logger:  logger,
-			Cluster: &clusterv1.Cluster{},
-			AWSCluster: &infrav1.AWSCluster{
-				Spec: infrav1.AWSClusterSpec{
-					Region: "us-east-1",
-				},
-			},
-		})
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-
-		// Create the machine poolscope
-		machinePoolScope, err := scope.NewMachinePoolScope(scope.MachinePoolScopeParams{
-			Logger:      logger,
-			Client:      r.Client,
-			Cluster:     &clusterv1.Cluster{},
-			MachinePool: &expinfrav1.MachinePool{},
-			AWSCluster: &infrav1.AWSCluster{
-				Spec: infrav1.AWSClusterSpec{
-					Region: "us-east-1",
-				},
-			},
-			AWSMachinePool: awsMachinePool,
-		})
-		if err != nil {
-			return ctrl.Result{}, errors.Errorf("failed to create scope: %+v", err)
-		}
-
-		asgsvc := r.getASGService(clusterScope)
-		r.createPool(machinePoolScope, clusterScope, asgsvc)
-		return ctrl.Result{}, nil
-
+		return ctrl.Result{}, errors.Errorf("failed to create scope: %+v", err)
 	}
+
+	asgsvc := r.getASGService(clusterScope)
+	r.createPool(machinePoolScope, clusterScope, asgsvc)
 	return ctrl.Result{}, nil
+
+	// }
 }
 
 func (r *AWSMachinePoolReconciler) SetupWithManager(mgr ctrl.Manager) error {
