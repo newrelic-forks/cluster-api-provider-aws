@@ -20,16 +20,12 @@ apiVersion: exp.infrastructure.cluster.x-k8s.io/v1alpha3
 kind: AWSManagedCluster
 metadata:
   name: "${CLUSTER_NAME}"
-spec:
-  region: "${AWS_REGION}"
-  sshKeyName: "${AWS_SSH_KEY_NAME}"
 ---
 kind: AWSManagedControlPlane
 apiVersion: exp.infrastructure.cluster.x-k8s.io/v1alpha3
 metadata:
   name: "${CLUSTER_NAME}-control-plane"
 spec:
+  region: "${AWS_REGION}"
+  sshKeyName: "${AWS_SSH_KEY_NAME}"
   version: "${EKS_KUBERNETES_VERSION}"
-  # roleName: "${AWS_EKS_ROLE_ARN}"
-  # TODO: encryptionConfig:
-  # TODO: logging:

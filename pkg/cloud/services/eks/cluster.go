@@ -104,24 +104,19 @@ func (s *Service) reconcileCluster(ctx context.Context) error {
 func (s *Service) setStatus(cluster *eks.Cluster) error {
 	switch *cluster.Status {
 	case eks.ClusterStatusDeleting:
-		s.scope.ControlPlane.Status.Initialized = false
 		s.scope.ControlPlane.Status.Ready = false
 	case eks.ClusterStatusFailed:
-		s.scope.ControlPlane.Status.Initialized = true
 		s.scope.ControlPlane.Status.Ready = false
 		// TODO FailureReason
 		failureMsg := fmt.Sprintf("EKS cluster in unexpected %s state", *cluster.Status)
 		s.scope.ControlPlane.Status.FailureMessage = &failureMsg
 	case eks.ClusterStatusActive:
-		s.scope.ControlPlane.Status.Initialized = true
 		s.scope.ControlPlane.Status.Ready = true
 		s.scope.ControlPlane.Status.FailureMessage = nil
 		// TODO FailureReason
 	case eks.ClusterStatusCreating:
-		s.scope.ControlPlane.Status.Initialized = true
 		s.scope.ControlPlane.Status.Ready = false
 	case eks.ClusterStatusUpdating:
-		s.scope.ControlPlane.Status.Initialized = true
 		s.scope.ControlPlane.Status.Ready = true
 	default:
 		return errors.Errorf("unexpected EKS cluster status %s", *cluster.Status)
