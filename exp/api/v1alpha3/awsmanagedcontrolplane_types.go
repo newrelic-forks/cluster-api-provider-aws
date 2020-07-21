@@ -86,6 +86,14 @@ type AWSManagedControlPlaneSpec struct {
 	// Bastion contains options to configure the bastion host.
 	// +optional
 	Bastion infrav1.Bastion `json:"bastion"`
+
+	// TokenMethod is used to specify the method for obtaining a client token for communicating with EKS
+	// iam-authenticator - obtains a client token using iam-authentictor
+	// aws-cli - obtains a client token using the AWS CLI
+	// Defaults to iam-authenticator
+	// +kubebuilder:default=iam-authenticator
+	// +kubebuilder:validation:Enum=iam-authenticator;aws-cli
+	TokenMethod *EKSTokenMethod `json:"tokenMethod,omitempty"`
 }
 
 // EndpointAccess specifies how control plane endpoints are accessible

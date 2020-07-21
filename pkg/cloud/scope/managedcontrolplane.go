@@ -217,3 +217,12 @@ func (s *ManagedControlPlaneScope) SSHKeyName() *string {
 func (s *ManagedControlPlaneScope) ControllerName() string {
 	return s.controllerName
 }
+
+// TokenMethod returns the token method to use in the kubeconfig
+func (s *ManagedControlPlaneScope) TokenMethod() infrav1exp.EKSTokenMethod {
+	if s.ControlPlane.Spec.TokenMethod != nil {
+		return *s.ControlPlane.Spec.TokenMethod
+	}
+
+	return infrav1exp.EKSTokenMethodIAMAuthenticator
+}
