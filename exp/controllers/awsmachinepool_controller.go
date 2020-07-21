@@ -29,6 +29,7 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
 	expinfrav1 "sigs.k8s.io/cluster-api-provider-aws/exp/api/v1alpha3"
@@ -49,10 +50,8 @@ type AWSMachinePoolReconciler struct {
 
 func (r *AWSMachinePoolReconciler) getASGService(scope *scope.ClusterScope) services.ASGMachineInterface {
 	if r.asgServiceFactory != nil {
-		r.Log.Info("--------TESTING-52------------")
 		return r.asgServiceFactory(scope)
 	}
-	r.Log.Info("--------TESTING-55------------")
 	return asg.NewService(scope)
 }
 
@@ -72,35 +71,6 @@ func (r *AWSMachinePoolReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 	ctx := context.TODO()
 	logger := r.Log.WithValues("namespace", req.Namespace, "awsMachinePool", req.Name)
 
-	// Create the cluster scope
-	// clusterScope, err := scope.NewClusterScope(scope.ClusterScopeParams{
-	// 	Client:  r.Client,
-	// 	Logger:  r.Log,
-	// 	Cluster: &clusterv1.Cluster{},
-	// 	AWSCluster: &infrav1.AWSCluster{
-	// 		Spec: infrav1.AWSClusterSpec{
-	// 			Region: "us-east-1",
-	// 		},
-	// 	},
-	// })
-	// if err != nil {
-	// 	return ctrl.Result{}, err
-	// }
-
-	// machinePoolScope, err := scope.NewMachinePoolScope(scope.MachinePoolScopeParams{
-	// 	Logger: logger,
-	// 	Client: r.Client,
-	// 	// Cluster:    cluster,
-	// 	// Machine:    machine,
-	// 	// AWSCluster: awsCluster,
-	// 	// AWSMachine: awsMachinePool,
-	// })
-
-	//TODO: use this in autoscalinggroupƒ.go
-	// ec2svc := ec2.NewService(clusterScope)
-	// lt, err = ec2svc.GetLaunchTemplate("mytu-test")
-	// if err != nil {
-	// Fetch the AWSMachinePool .
 	awsMachinePool := &expinfrav1.AWSMachinePool{}
 	err := r.Get(ctx, req.NamespacedName, awsMachinePool)
 	if err != nil {
@@ -142,10 +112,7 @@ func (r *AWSMachinePoolReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		return ctrl.Result{}, errors.Errorf("failed to create scope: %+v", err)
 	}
 
-	r.createPool(machinePoolScope, clusterScope)
-	return ctrl.Result{}, nil
-
-	// }
+	return r.reconcileNormal(ctx, machinePoolScope, clusterScope)
 }
 
 func (r *AWSMachinePoolReconciler) SetupWithManager(mgr ctrl.Manager) error {
@@ -156,14 +123,24 @@ func (r *AWSMachinePoolReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 func (r *AWSMachinePoolReconciler) reconcileNormal(_ context.Context, machinePoolScope *scope.MachinePoolScope, clusterScope *scope.ClusterScope) (ctrl.Result, error) {
 	clusterScope.Info("Reconciling AWSMachine")
+	// If the AWSMachinepool doesn't have our finalizer, add it
+	controllerutil.AddFinalizer(machinePoolScope.AWSMachinePool, infrav1.MachineFinalizer)
+	// Make sure bootstrap data is available and populated
 
-	// asgsvc := r.getASGService(clusterScope)
+	// Find existing Instance
 	r.getASGService(clusterScope)
 
-	// Update or create
-	// findASG()
+	// Create new ASG
 
+	// Make sure Spec.ProviderID is always set.
+	machinePoolScope.SetProviderID(instance.ID, instance.AvailabilityZone)
+
+	// Get state of ASG
+	// Set state
+	// Reconcile AWSMachinePool State
+	//Handle switch case instance.State{}
 	return ctrl.Result{}, nil
+
 }
 
 func (r *AWSMachinePoolReconciler) reconcileDelete(machinePoolScope *scope.MachinePoolScope, clusterScope *scope.ClusterScope) (ctrl.Result, error) {
@@ -190,7 +167,6 @@ func (r *AWSMachinePoolReconciler) createPool(machinePoolScope *scope.MachinePoo
 
 func (r *AWSMachinePoolReconciler) findASG(machinePoolScope *scope.MachinePoolScope, asgsvc services.ASGMachineInterface, clusterScope *scope.ClusterScope) (*infrav1.AutoScalingGroup, error) {
 	clusterScope.Info("Finding ASG")
-	//TODO: I don't understand this comment yet lol \/
 	// if instance is nil
 	//   createPool() (both launch template and ASG)
 	// else
