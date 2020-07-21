@@ -27,7 +27,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/pointer"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
-	expclusterv1 "sigs.k8s.io/cluster-api/exp/api/v1alpha3"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -86,17 +85,17 @@ func (r *AWSMachinePoolReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		return ctrl.Result{}, err
 	}
 
-	machinePoolScope, err := scope.NewMachinePoolScope(scope.MachinePoolScopeParams{
-		Logger: logger,
-		Client: r.Client,
-		// Cluster:    cluster,
-		// Machine:    machine,
-		// AWSCluster: awsCluster,
-		// AWSMachine: awsMachinePool,
-	})
+	// machinePoolScope, err := scope.NewMachinePoolScope(scope.MachinePoolScopeParams{
+	// 	Logger: logger,
+	// 	Client: r.Client,
+	// 	// Cluster:    cluster,
+	// 	// Machine:    machine,
+	// 	// AWSCluster: awsCluster,
+	// 	// AWSMachine: awsMachinePool,
+	// })
 
 	ec2svc := ec2.NewService(clusterScope)
-	_, err = ec2svc.GetLaunchTemplate()
+	_, err = ec2svc.GetLaunchTemplate("mytu-test")
 	if err != nil {
 		// Fetch the AWSMachinePool .
 		awsMachinePool := &expinfrav1.AWSMachinePool{}
@@ -128,7 +127,7 @@ func (r *AWSMachinePoolReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 			Logger:      logger,
 			Client:      r.Client,
 			Cluster:     &clusterv1.Cluster{},
-			MachinePool: &expclusterv1.MachinePool{},
+			MachinePool: &expinfrav1.MachinePool{},
 			AWSCluster: &infrav1.AWSCluster{
 				Spec: infrav1.AWSClusterSpec{
 					Region: "us-east-1",
@@ -140,10 +139,8 @@ func (r *AWSMachinePoolReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 			return ctrl.Result{}, errors.Errorf("failed to create scope: %+v", err)
 		}
 
-		// testing from July15 mob
-		ec2svc := ec2.NewService(clusterScope)
-		// trying to create things
-		r.createPool(machinePoolScope, ec2svc)
+		asgsvc := r.getASGService(clusterScope)
+		r.createPool(machinePoolScope, clusterScope, asgsvc)
 		return ctrl.Result{}, nil
 
 	}
