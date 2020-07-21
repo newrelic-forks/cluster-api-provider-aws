@@ -60,3 +60,15 @@ func (s *ControlPlaneLoggingSpec) IsLogEnabled(logName string) bool {
 		return false
 	}
 }
+
+// EKSTokenMethod defines the method for obtaining a client token to use when connecting to EKS.
+type EKSTokenMethod string
+
+var (
+	// EKSTokenMethodIAMAuthenticator indicates that IAM autenticator will be used to get a token
+	EKSTokenMethodIAMAuthenticator = EKSTokenMethod("iam-authenticator")
+
+	// EKSTokenMethodAWSCli indicates that the AWS CLI will be used to get a token
+	// Version 1.16.156 or greater is required of the AWS CLI
+	EKSTokenMethodAWSCli = EKSTokenMethod("aws-cli")
+)

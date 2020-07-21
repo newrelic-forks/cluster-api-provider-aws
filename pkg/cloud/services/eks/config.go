@@ -86,18 +86,31 @@ func (s *Service) createKubeconfigSecret(ctx context.Context, cluster *eks.Clust
 			},
 		},
 		CurrentContext: contextName,
-		AuthInfos: map[string]*api.AuthInfo{
-			userName: {
-				Exec: &api.ExecConfig{
-					APIVersion: "client.authentication.k8s.io/v1alpha1",
-					Command:    "aws-iam-authenticator",
-					Args: []string{
-						"token",
-						"-i",
-						clusterName,
-					},
-				},
-			},
+	}
+
+	execConfig := &api.ExecConfig{APIVersion: "client.authentication.k8s.io/v1alpha1"}
+	switch s.scope.TokenMethod() {
+	case infrav1exp.EKSTokenMethodIAMAuthenticator:
+		execConfig.Command = "aws-iam-authenticator"
+		execConfig.Args = []string{
+			"token",
+			"-i",
+			clusterName,
+		}
+	case infrav1exp.EKSTokenMethodAWSCli:
+		execConfig.Command = "aws"
+		execConfig.Args = []string{
+			"eks",
+			"get-token",
+			"--cluster-name",
+			clusterName,
+		}
+	default:
+		return fmt.Errorf("unknown token method %s", s.scope.TokenMethod())
+	}
+	cfg.AuthInfos = map[string]*api.AuthInfo{
+		userName: {
+			Exec: execConfig,
 		},
 	}
 
