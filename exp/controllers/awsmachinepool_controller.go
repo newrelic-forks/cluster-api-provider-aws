@@ -77,8 +77,6 @@ func (r *AWSMachinePoolReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 	ctx := context.TODO()
 	logger := r.Log.WithValues("namespace", req.Namespace, "awsMachinePool", req.Name)
 
-	// make the aws launch template?
-
 	// Create the cluster scope
 	clusterScope, err := scope.NewClusterScope(scope.ClusterScopeParams{
 		Client:  r.Client,
