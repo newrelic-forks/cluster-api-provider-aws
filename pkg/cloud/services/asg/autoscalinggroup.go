@@ -135,11 +135,13 @@ func (s *Service) runPool(i *infrav1.AutoScalingGroup) (*infrav1.AutoScalingGrou
 	}
 
 	s.scope.Info("Creating AutoScalingGroup")
-	s.scope.Info("Client: %s", s.scope.ASG)
-	_, err := s.scope.ASG.CreateAutoScalingGroup(input)
+
+	out, err := s.scope.ASG.CreateAutoScalingGroup(input)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create autoscaling group")
 	}
+	s.scope.Info("", "myscope", out)
+
 	// verify ASG was created
 
 	return s.SDKToAutoScalingGroup(&autoscaling.Group{}) //TODO: fill with real one

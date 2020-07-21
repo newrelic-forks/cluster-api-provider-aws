@@ -22,6 +22,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/request"
+	"github.com/aws/aws-sdk-go/service/autoscaling"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/elb"
 	"github.com/aws/aws-sdk-go/service/resourcegroupstaggingapi"
@@ -69,6 +70,14 @@ func NewClusterScope(params ClusterScopeParams) (*ClusterScope, error) {
 	userAgentHandler := request.NamedHandler{
 		Name: "capa/user-agent",
 		Fn:   request.MakeAddToUserAgentHandler("aws.cluster.x-k8s.io", version.Get().String()),
+	}
+
+	//TODO: put in experimental?
+	if params.AWSClients.ASG == nil {
+		asgClient := autoscaling.New(session)
+		asgClient.Handlers.Build.PushFrontNamed(userAgentHandler)
+		asgClient.Handlers.Complete.PushBack(recordAWSPermissionsIssue(params.AWSCluster))
+		params.AWSClients.ASG = asgClient
 	}
 
 	if params.AWSClients.EC2 == nil {
