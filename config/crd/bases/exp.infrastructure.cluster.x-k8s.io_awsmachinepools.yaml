@@ -57,9 +57,10 @@ spec:
                           description: EBS from describe-launch-templates
                           properties:
                             encrypted:
-                              type: string
+                              type: boolean
                             volumeSize:
-                              type: string
+                              format: int64
+                              type: integer
                             volumeType:
                               type: string
                           type: object
@@ -79,7 +80,9 @@ spec:
                       description: NetworkInterface from describe-launch-templates
                       properties:
                         deviceIndex:
-                          type: string
+                          format: int64
+                          type: integer
+
                         groups:
                           items:
                             type: string
@@ -92,6 +95,9 @@ spec:
                       keys), a valid SSH key name, or omitted (use the default SSH
                       key name)
                     type: string
+                  versionNumber:
+                    format: int64
+                    type: integer
                 type: object
               defaultCooldown:
                 type: integer

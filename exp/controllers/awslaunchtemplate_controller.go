@@ -41,8 +41,6 @@ func (r *AWSLaunchTemplateReconciler) Reconcile(req ctrl.Request) (ctrl.Result, 
 	_ = context.Background()
 	_ = r.Log.WithValues("awslaunchtemplate", req.NamespacedName)
 
-	// your logic here
-
 	return ctrl.Result{}, nil
 }
 
