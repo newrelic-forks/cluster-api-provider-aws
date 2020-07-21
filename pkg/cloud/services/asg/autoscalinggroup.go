@@ -54,7 +54,7 @@ func (s *Service) AsgIfExists(name *string) (*infrav1.AutoScalingGroup, error) {
 		return nil, nil
 	}
 
-	s.scope.V(2).Info("Looking for asg by name", "name", *name)
+	s.scope.Info("Looking for asg by name", "name", *name)
 
 	input := &autoscaling.DescribeAutoScalingGroupsInput{
 		AutoScalingGroupNames: []*string{name},
@@ -75,7 +75,7 @@ func (s *Service) AsgIfExists(name *string) (*infrav1.AutoScalingGroup, error) {
 
 // GetRunningAsgByName returns the existing ASG or nothing if it doesn't exist.
 func (s *Service) GetRunningAsgByName(scope *scope.MachinePoolScope) (*infrav1.AutoScalingGroup, error) {
-	s.scope.V(2).Info("Looking for existing machine instance by tags")
+	s.scope.Info("Looking for existing machine instance by tags")
 
 	input := &autoscaling.DescribeAutoScalingGroupsInput{
 		AutoScalingGroupNames: []*string{
@@ -97,7 +97,7 @@ func (s *Service) GetRunningAsgByName(scope *scope.MachinePoolScope) (*infrav1.A
 
 // CreateASG runs an autoscaling group.
 func (s *Service) CreateASG(scope *scope.MachinePoolScope) (*infrav1.AutoScalingGroup, error) {
-	s.scope.V(2).Info("Creating an autoscaling group for a machine pool")
+	s.scope.Info("Creating an autoscaling group for a machine pool")
 
 	input := &infrav1.AutoScalingGroup{
 		AutoScalingGroupName: "nicole-testy-westy", //TODO: define dynamically - borrow logic from ec2
@@ -105,13 +105,12 @@ func (s *Service) CreateASG(scope *scope.MachinePoolScope) (*infrav1.AutoScaling
 		LaunchTemplateSpecification: &autoscaling.LaunchTemplateSpecification{
 			LaunchTemplateName: aws.String("mytu-test"),
 		}, //TODO: get from mytu's code, remove hard code val, get machinepool.go
-		MaxSize:              5, //TODO: Define for realsies later
-		MinSize:              1,
-		MixedInstancesPolicy: &autoscaling.MixedInstancesPolicy{},
+		MaxSize: 5, //TODO: Define for realsies later
+		MinSize: 1,
 	}
 
 	// TODO: do additional tags
-	s.scope.V(2).Info("Running instance")
+	s.scope.Info("Running instance")
 	_, err := s.runPool(input) //TODO: log out for more debugging
 	if err != nil {
 		// Only record the failure event if the error is not related to failed dependencies.
@@ -133,9 +132,10 @@ func (s *Service) runPool(i *infrav1.AutoScalingGroup) (*infrav1.AutoScalingGrou
 		LaunchTemplate:       i.LaunchTemplateSpecification,
 		MaxSize:              aws.Int64(i.MaxSize),
 		MinSize:              aws.Int64(i.MinSize),
-		MixedInstancesPolicy: i.MixedInstancesPolicy,
 	}
 
+	s.scope.Info("Creating AutoScalingGroup")
+	s.scope.Info("Client: %s", s.scope.ASG)
 	_, err := s.scope.ASG.CreateAutoScalingGroup(input)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create autoscaling group")
