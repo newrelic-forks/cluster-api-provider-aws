@@ -15,3 +15,13 @@ spec:
     imageId: "ami-06001cac528f2f10c"
     instanceType: "t2.medium"
     sshKeyName: "confab_development"
+    blockDeviceMappings:
+    - deviceName: "/dev/xvda"
+      ebs:
+        encrypted: false
+        volumeSize: 80
+        volumeType: gp2
+    networkInterfaces:
+    - groups:
+      - sg-0e5dfcb2de6ae495b
+      - sg-02f5ddf1ac23d18d6

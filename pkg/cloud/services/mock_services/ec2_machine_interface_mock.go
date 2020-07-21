@@ -24,6 +24,7 @@ import (
 	gomock "github.com/golang/mock/gomock"
 	reflect "reflect"
 	v1alpha3 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
+	v1alpha30 "sigs.k8s.io/cluster-api-provider-aws/exp/api/v1alpha3"
 	scope "sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/scope"
 )
 
@@ -63,6 +64,21 @@ func (m *MockEC2MachineInterface) CreateInstance(arg0 *scope.MachineScope, arg1 
 func (mr *MockEC2MachineInterfaceMockRecorder) CreateInstance(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateInstance", reflect.TypeOf((*MockEC2MachineInterface)(nil).CreateInstance), arg0, arg1)
+}
+
+// CreateLaunchTemplate mocks base method
+func (m *MockEC2MachineInterface) CreateLaunchTemplate(arg0 *scope.MachinePoolScope) (*v1alpha30.AwsLaunchTemplate, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateLaunchTemplate", arg0)
+	ret0, _ := ret[0].(*v1alpha30.AwsLaunchTemplate)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateLaunchTemplate indicates an expected call of CreateLaunchTemplate
+func (mr *MockEC2MachineInterfaceMockRecorder) CreateLaunchTemplate(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateLaunchTemplate", reflect.TypeOf((*MockEC2MachineInterface)(nil).CreateLaunchTemplate), arg0)
 }
 
 // DetachSecurityGroupsFromNetworkInterface mocks base method
@@ -107,6 +123,21 @@ func (m *MockEC2MachineInterface) GetInstanceSecurityGroups(arg0 string) (map[st
 func (mr *MockEC2MachineInterfaceMockRecorder) GetInstanceSecurityGroups(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetInstanceSecurityGroups", reflect.TypeOf((*MockEC2MachineInterface)(nil).GetInstanceSecurityGroups), arg0)
+}
+
+// GetLaunchTemplate mocks base method
+func (m *MockEC2MachineInterface) GetLaunchTemplate(arg0 string) (*v1alpha30.AwsLaunchTemplate, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetLaunchTemplate", arg0)
+	ret0, _ := ret[0].(*v1alpha30.AwsLaunchTemplate)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetLaunchTemplate indicates an expected call of GetLaunchTemplate
+func (mr *MockEC2MachineInterfaceMockRecorder) GetLaunchTemplate(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLaunchTemplate", reflect.TypeOf((*MockEC2MachineInterface)(nil).GetLaunchTemplate), arg0)
 }
 
 // GetRunningInstanceByTags mocks base method

@@ -22,8 +22,8 @@ import (
 
 // EBS from describe-launch-templates
 type EBS struct {
-	Encrypted  string `json:"encrypted,omitempty"`
-	VolumeSize string `json:"volumeSize,omitempty"`
+	Encrypted  bool   `json:"encrypted,omitempty"`
+	VolumeSize int64  `json:"volumeSize,omitempty"`
 	VolumeType string `json:"volumeType,omitempty"`
 }
 
@@ -35,7 +35,7 @@ type BlockDeviceMapping struct {
 
 // NetworkInterface from describe-launch-templates
 type NetworkInterface struct {
-	DeviceIndex string   `json:"deviceIndex,omitempty"`
+	DeviceIndex int64    `json:"deviceIndex,omitempty"`
 	Groups      []string `json:"groups,omitempty"`
 }
 
@@ -56,6 +56,8 @@ type AwsLaunchTemplate struct {
 	// SSHKeyName is the name of the ssh key to attach to the instance. Valid values are empty string (do not use SSH keys), a valid SSH key name, or omitted (use the default SSH key name)
 	// +optional
 	SSHKeyName *string `json:"sshKeyName,omitempty"`
+
+	VersionNumber *int64 `json:"versionNumber,omitempty"`
 }
 
 // LaunchTemplateSpecification from describe-auto-scaling-groups
