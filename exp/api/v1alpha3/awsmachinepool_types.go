@@ -22,6 +22,10 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
 )
 
+const (
+	MachinePoolFinalizer = "awsmachinepool.infrastructure.cluster.x-k8s.io"
+)
+
 // AWSMachinePoolSpec defines the desired state of AWSMachinePool
 type AWSMachinePoolSpec struct {
 	ProviderID                       *string              `json:"providerID,omitempty"` //TODO: is this needed?

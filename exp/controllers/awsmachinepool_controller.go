@@ -155,11 +155,11 @@ func (r *AWSMachinePoolReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, r
 		// set Ready condition before AWSMachine is patched
 		conditions.SetSummary(machinePoolScope.AWSMachinePool,
 			conditions.WithConditions(
-				infrav1.InstanceReadyCondition,
+				expinfrav1.ASGReadyCondition,
 				infrav1.SecurityGroupsReadyCondition,
 			),
 			conditions.WithStepCounterIfOnly(
-				infrav1.InstanceReadyCondition,
+				expinfrav1.ASGReadyCondition,
 				infrav1.SecurityGroupsReadyCondition,
 			),
 		)
@@ -208,7 +208,7 @@ func (r *AWSMachinePoolReconciler) reconcileNormal(_ context.Context, machinePoo
 	if machinePoolScope.MachinePool.Spec.Template.Spec.Bootstrap.DataSecretName == nil {
 		machinePoolScope.Info("I need to know the name", "dataSecretName", machinePoolScope.MachinePool.Spec.Template.Spec.Bootstrap.DataSecretName)
 		machinePoolScope.Info("Bootstrap data secret reference is not yet available")
-		conditions.MarkFalse(machinePoolScope.AWSMachinePool, infrav1.InstanceReadyCondition, infrav1.WaitingForBootstrapDataReason, clusterv1.ConditionSeverityInfo, "") //TODO: GetCondition()
+		conditions.MarkFalse(machinePoolScope.AWSMachinePool, expinfrav1.ASGReadyCondition, infrav1.WaitingForBootstrapDataReason, clusterv1.ConditionSeverityInfo, "") //TODO: GetCondition()
 		return ctrl.Result{}, nil
 	}
 
@@ -236,7 +236,7 @@ func (r *AWSMachinePoolReconciler) reconcileNormal(_ context.Context, machinePoo
 	// Find existing ASG
 	asg, err := r.findASG(machinePoolScope, asgsvc)
 	if err != nil {
-		conditions.MarkUnknown(machinePoolScope.AWSMachinePool, infrav1.InstanceReadyCondition, infrav1.InstanceNotFoundReason, err.Error())
+		conditions.MarkUnknown(machinePoolScope.AWSMachinePool, expinfrav1.ASGReadyCondition, expinfrav1.ASGNotFoundReason, err.Error())
 		return ctrl.Result{}, err
 	}
 	if asg == nil {
@@ -244,7 +244,7 @@ func (r *AWSMachinePoolReconciler) reconcileNormal(_ context.Context, machinePoo
 		// Create new ASG
 		_, err = r.createPool(machinePoolScope, clusterScope)
 		if err != nil {
-			conditions.MarkFalse(machinePoolScope.AWSMachinePool, infrav1.InstanceReadyCondition, infrav1.InstanceProvisionFailedReason, clusterv1.ConditionSeverityError, err.Error())
+			conditions.MarkFalse(machinePoolScope.AWSMachinePool, expinfrav1.ASGReadyCondition, expinfrav1.ASGProvisionFailedReason, clusterv1.ConditionSeverityError, err.Error())
 			return ctrl.Result{}, err
 		}
 		return ctrl.Result{}, nil
