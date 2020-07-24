@@ -160,14 +160,14 @@ func (r *AWSMachinePoolReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, r
 >>>>>>> 824252c3... wip: pushing status additions
 	// Always close the scope when exiting this function so we can persist any AWSMachine changes.
 	defer func() {
-		// set Ready condition before AWSMachine is patched
+		// set Ready condition before AWSMachinePool is patched
 		conditions.SetSummary(machinePoolScope.AWSMachinePool,
 			conditions.WithConditions(
-				infrav1.InstanceReadyCondition,
+				expinfrav1.ASGReady,
 				infrav1.SecurityGroupsReadyCondition,
 			),
 			conditions.WithStepCounterIfOnly(
-				infrav1.InstanceReadyCondition,
+				expinfrav1.ASGReady,
 				infrav1.SecurityGroupsReadyCondition,
 			),
 		)
