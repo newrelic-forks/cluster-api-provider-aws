@@ -31,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/pointer"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
 	capiv1exp "sigs.k8s.io/cluster-api/exp/api/v1alpha3"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -148,9 +149,26 @@ func (r *AWSMachinePoolReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, r
 		return ctrl.Result{}, errors.Errorf("failed to create scope: %+v", err)
 	}
 
+<<<<<<< HEAD
 	// Always close the scope so we can persist changes
 	defer func() {
 		// todo: conditions
+=======
+	// todo: defer conditions + machinePoolScope.Close()
+	// Always close the scope when exiting this function so we can persist any AWSMachine changes.
+	defer func() {
+		// set Ready condition before AWSMachine is patched
+		conditions.SetSummary(machinePoolScope.AWSMachinePool,
+			conditions.WithConditions(
+				infrav1.InstanceReadyCondition,
+				infrav1.SecurityGroupsReadyCondition,
+			),
+			conditions.WithStepCounterIfOnly(
+				infrav1.InstanceReadyCondition,
+				infrav1.SecurityGroupsReadyCondition,
+			),
+		)
+>>>>>>> 43ac97d4... wip: need to pull in new change
 
 		if err := machinePoolScope.Close(); err != nil && reterr == nil {
 			reterr = err
@@ -224,6 +242,7 @@ func (r *AWSMachinePoolReconciler) reconcileNormal(_ context.Context, machinePoo
 	// Find existing ASG
 	asg, err := r.findASG(machinePoolScope, asgsvc)
 	if err != nil {
+		conditions.MarkUnknown(machinePoolScope.AWSMachinePool, infrav1.InstanceReadyCondition, infrav1.InstanceNotFoundReason, err.Error())
 		return ctrl.Result{}, err
 	}
 	if asg == nil {
@@ -231,7 +250,7 @@ func (r *AWSMachinePoolReconciler) reconcileNormal(_ context.Context, machinePoo
 		// Create new ASG
 		_, err = r.createPool(machinePoolScope, clusterScope)
 		if err != nil {
-			//TODO: ADd conditions
+			conditions.MarkFalse(machinePoolScope.AWSMachinePool, infrav1.InstanceReadyCondition, infrav1.InstanceProvisionFailedReason, clusterv1.ConditionSeverityError, err.Error())
 			return ctrl.Result{}, err
 		}
 		return ctrl.Result{}, nil
