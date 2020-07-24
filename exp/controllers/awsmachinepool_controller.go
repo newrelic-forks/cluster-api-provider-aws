@@ -149,29 +149,20 @@ func (r *AWSMachinePoolReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, r
 		return ctrl.Result{}, errors.Errorf("failed to create scope: %+v", err)
 	}
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-	// Always close the scope so we can persist changes
-	defer func() {
-		// todo: conditions
-=======
 	// todo: defer conditions + machinePoolScope.Close()
-=======
->>>>>>> 824252c3... wip: pushing status additions
 	// Always close the scope when exiting this function so we can persist any AWSMachine changes.
 	defer func() {
-		// set Ready condition before AWSMachinePool is patched
+		// set Ready condition before AWSMachine is patched
 		conditions.SetSummary(machinePoolScope.AWSMachinePool,
 			conditions.WithConditions(
-				expinfrav1.ASGReady,
+				infrav1.InstanceReadyCondition,
 				infrav1.SecurityGroupsReadyCondition,
 			),
 			conditions.WithStepCounterIfOnly(
-				expinfrav1.ASGReady,
+				infrav1.InstanceReadyCondition,
 				infrav1.SecurityGroupsReadyCondition,
 			),
 		)
->>>>>>> 43ac97d4... wip: need to pull in new change
 
 		if err := machinePoolScope.Close(); err != nil && reterr == nil {
 			reterr = err
@@ -206,32 +197,18 @@ func (r *AWSMachinePoolReconciler) reconcileNormal(_ context.Context, machinePoo
 	// If the AWSMachinepool doesn't have our finalizer, add it
 	controllerutil.AddFinalizer(machinePoolScope.AWSMachinePool, expinfrav1.MachinePoolFinalizer)
 
-<<<<<<< HEAD
 	// Register finalizer immediately to avoid orphaning AWS resources
 	if err := machinePoolScope.PatchObject(); err != nil {
 		return ctrl.Result{}, err
 	}
 
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
-	// todo: implement machinePoolScope.PatchObject for quickly registering the finalizer
->>>>>>> 824252c3... wip: pushing status additions
 	// todo: check cluster InfrastructureReady
-=======
-=======
->>>>>>> 312856ef... fix: resolving conflict
-	if !machinePoolScope.Cluster.Status.InfrastructureReady {
-		machinePoolScope.Info("Cluster infrastructure is not ready yet")
-		conditions.MarkFalse(machinePoolScope.AWSMachinePool, expinfrav1.ASGReady, infrav1.WaitingForClusterInfrastructureReason, clusterv1.ConditionSeverityInfo, "")
-		return ctrl.Result{}, nil
-	}
 
 	// Make sure bootstrap data is available and populated
 	if machinePoolScope.MachinePool.Spec.Template.Spec.Bootstrap.DataSecretName == nil {
 		machinePoolScope.Info("I need to know the name", "dataSecretName", machinePoolScope.MachinePool.Spec.Template.Spec.Bootstrap.DataSecretName)
 		machinePoolScope.Info("Bootstrap data secret reference is not yet available")
-		conditions.MarkFalse(machinePoolScope.AWSMachinePool, expinfrav1.ASGReady, infrav1.WaitingForBootstrapDataReason, clusterv1.ConditionSeverityInfo, "") //TODO: GetCondition()
+		conditions.MarkFalse(machinePoolScope.AWSMachinePool, infrav1.InstanceReadyCondition, infrav1.WaitingForBootstrapDataReason, clusterv1.ConditionSeverityInfo, "") //TODO: GetCondition()
 		return ctrl.Result{}, nil
 	}
 
@@ -259,14 +236,15 @@ func (r *AWSMachinePoolReconciler) reconcileNormal(_ context.Context, machinePoo
 	// Find existing ASG
 	asg, err := r.findASG(machinePoolScope, asgsvc)
 	if err != nil {
-		conditions.MarkUnknown(machinePoolScope.AWSMachinePool, expinfrav1.ASGReady, expinfrav1.ASGNotFoundReason, err.Error())
+		conditions.MarkUnknown(machinePoolScope.AWSMachinePool, infrav1.InstanceReadyCondition, infrav1.InstanceNotFoundReason, err.Error())
 		return ctrl.Result{}, err
 	}
 	if asg == nil {
+
 		// Create new ASG
 		_, err = r.createPool(machinePoolScope, clusterScope)
 		if err != nil {
-			conditions.MarkFalse(machinePoolScope.AWSMachinePool, expinfrav1.ASGReady, expinfrav1.ASGProvisionFailedReason, clusterv1.ConditionSeverityError, err.Error())
+			conditions.MarkFalse(machinePoolScope.AWSMachinePool, infrav1.InstanceReadyCondition, infrav1.InstanceProvisionFailedReason, clusterv1.ConditionSeverityError, err.Error())
 			return ctrl.Result{}, err
 		}
 		return ctrl.Result{}, nil
@@ -279,7 +257,6 @@ func (r *AWSMachinePoolReconciler) reconcileNormal(_ context.Context, machinePoo
 	// Set state
 	// Reconcile AWSMachinePool State
 	//Handle switch case instance.State{}
-
 	return ctrl.Result{}, nil
 
 }
