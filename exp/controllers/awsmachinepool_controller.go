@@ -30,11 +30,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/tools/record"
-<<<<<<< HEAD
-	"k8s.io/utils/pointer"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
-=======
->>>>>>> add instances to awsmachinepool spec
 	capiv1exp "sigs.k8s.io/cluster-api/exp/api/v1alpha3"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -213,7 +209,6 @@ func (r *AWSMachinePoolReconciler) reconcileNormal(_ context.Context, machinePoo
 
 	// Make sure bootstrap data is available and populated
 	if machinePoolScope.MachinePool.Spec.Template.Spec.Bootstrap.DataSecretName == nil {
-		machinePoolScope.Info("I need to know the name", "dataSecretName", machinePoolScope.MachinePool.Spec.Template.Spec.Bootstrap.DataSecretName)
 		machinePoolScope.Info("Bootstrap data secret reference is not yet available")
 		conditions.MarkFalse(machinePoolScope.AWSMachinePool, expinfrav1.ASGReadyCondition, infrav1.WaitingForBootstrapDataReason, clusterv1.ConditionSeverityInfo, "")
 		return ctrl.Result{}, nil
