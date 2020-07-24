@@ -202,13 +202,17 @@ func (r *AWSMachinePoolReconciler) reconcileNormal(_ context.Context, machinePoo
 		return ctrl.Result{}, err
 	}
 
-	// todo: check cluster InfrastructureReady
+	if !machinePoolScope.Cluster.Status.InfrastructureReady {
+		machinePoolScope.Info("Cluster infrastructure is not ready yet")
+		conditions.MarkFalse(machinePoolScope.AWSMachinePool, expinfrav1.ASGReadyCondition, infrav1.WaitingForClusterInfrastructureReason, clusterv1.ConditionSeverityInfo, "")
+		return ctrl.Result{}, nil
+	}
 
 	// Make sure bootstrap data is available and populated
 	if machinePoolScope.MachinePool.Spec.Template.Spec.Bootstrap.DataSecretName == nil {
 		machinePoolScope.Info("I need to know the name", "dataSecretName", machinePoolScope.MachinePool.Spec.Template.Spec.Bootstrap.DataSecretName)
 		machinePoolScope.Info("Bootstrap data secret reference is not yet available")
-		conditions.MarkFalse(machinePoolScope.AWSMachinePool, expinfrav1.ASGReadyCondition, infrav1.WaitingForBootstrapDataReason, clusterv1.ConditionSeverityInfo, "") //TODO: GetCondition()
+		conditions.MarkFalse(machinePoolScope.AWSMachinePool, expinfrav1.ASGReadyCondition, infrav1.WaitingForBootstrapDataReason, clusterv1.ConditionSeverityInfo, "")
 		return ctrl.Result{}, nil
 	}
 
@@ -252,7 +256,6 @@ func (r *AWSMachinePoolReconciler) reconcileNormal(_ context.Context, machinePoo
 
 	// Make sure Spec.ProviderID is always set.
 	// machinePoolScope.SetProviderID(instance.ID, instance.AvailabilityZone)
-
 	// Get state of ASG
 	// Set state
 	// Reconcile AWSMachinePool State
