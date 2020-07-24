@@ -19,6 +19,7 @@ package v1alpha3
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
 )
 
 const (
@@ -54,7 +55,8 @@ type AWSMachinePoolSpec struct {
 
 // AWSMachinePoolStatus defines the observed state of AWSMachinePool
 type AWSMachinePoolStatus struct {
-	AutoScalingGroupARN string `json:"autoScalingGroupARN,omitempty"`
+	AutoScalingGroupARN string               `json:"autoScalingGroupARN,omitempty"`
+	Conditions          clusterv1.Conditions `json:"conditions,omitempty"`
 }
 
 // +kubebuilder:object:root=true
@@ -80,4 +82,12 @@ type AWSMachinePoolList struct {
 
 func init() {
 	SchemeBuilder.Register(&AWSMachinePool{}, &AWSMachinePoolList{})
+}
+
+func (r *AWSMachinePool) GetConditions() clusterv1.Conditions {
+	return r.Status.Conditions
+}
+
+func (r *AWSMachinePool) SetConditions(conditions clusterv1.Conditions) {
+	r.Status.Conditions = conditions
 }

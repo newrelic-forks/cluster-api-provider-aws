@@ -21,6 +21,7 @@ import (
 
 	"sigs.k8s.io/cluster-api/controllers/noderefutil"
 	"sigs.k8s.io/cluster-api/util"
+	"sigs.k8s.io/cluster-api/util/conditions"
 
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
@@ -195,7 +196,7 @@ func (r *AWSMachinePoolReconciler) reconcileNormal(_ context.Context, machinePoo
 	if machinePoolScope.MachinePool.Spec.Template.Spec.Bootstrap.DataSecretName == nil {
 		machinePoolScope.Info("I need to know the name", "dataSecretName", machinePoolScope.MachinePool.Spec.Template.Spec.Bootstrap.DataSecretName)
 		machinePoolScope.Info("Bootstrap data secret reference is not yet available")
-		// conditions.MarkFalse(machinePoolScope.AWSMachinePool, infrav1.InstanceReadyCondition, infrav1.WaitingForBootstrapDataReason, clusterv1.ConditionSeverityInfo, "") //TODO: GetCondition()
+		conditions.MarkFalse(machinePoolScope.AWSMachinePool, infrav1.InstanceReadyCondition, infrav1.WaitingForBootstrapDataReason, clusterv1.ConditionSeverityInfo, "") //TODO: GetCondition()
 		return ctrl.Result{}, nil
 	}
 
