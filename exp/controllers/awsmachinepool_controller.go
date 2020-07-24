@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 
-	"sigs.k8s.io/cluster-api/controllers/noderefutil"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/conditions"
 
@@ -31,8 +30,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/tools/record"
+<<<<<<< HEAD
 	"k8s.io/utils/pointer"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
+=======
+>>>>>>> add instances to awsmachinepool spec
 	capiv1exp "sigs.k8s.io/cluster-api/exp/api/v1alpha3"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -258,13 +260,14 @@ func (r *AWSMachinePoolReconciler) reconcileNormal(_ context.Context, machinePoo
 	// Make sure Spec.ProviderID is always set.
 	machinePoolScope.AWSMachinePool.Spec.ProviderID = fmt.Sprintf("%s", asg.ID)
 	providerIDList := make([]string, len(asg.Instances))
-	var readyCount int32
+
 	for i, ec2 := range asg.Instances {
 		providerIDList[i] = fmt.Sprintf("aws:///%s/%s", ec2.AvailabilityZone, ec2.ID)
 		// if ec2.State == infrav1.InstanceStateRunning {
 		// 	readyCount++
 		// }
 	}
+
 	machinePoolScope.AWSMachinePool.Spec.ProviderIDList = providerIDList
 	// TODO: update awsmachinepool status
 	// machinePoolScope.AWSMachinePool.Status.ProvisioningState = &asg.State
@@ -354,22 +357,7 @@ func (r *AWSMachinePoolReconciler) createPool(machinePoolScope *scope.MachinePoo
 func (r *AWSMachinePoolReconciler) findASG(machinePoolScope *scope.MachinePoolScope, asgsvc services.ASGInterface) (*expinfrav1.AutoScalingGroup, error) {
 	machinePoolScope.Info("Finding ASG")
 
-	// Parse the ProviderID
-	pid, err := noderefutil.NewProviderID(machinePoolScope.GetProviderID())
-	if err != nil && err != noderefutil.ErrEmptyProviderID {
-		return nil, errors.Wrapf(err, "failed to parse Spec.ProviderID")
-	}
-
-	// If the ProviderID is populated, describe the ASG using the ID.
-	if err == nil {
-		asg, err := asgsvc.AsgIfExists(pointer.StringPtr(pid.ID()))
-		if err != nil {
-			return nil, errors.Wrapf(err, "failed to query AWSMachinePool")
-		}
-		return asg, nil
-	}
-
-	// If the ProviderID is empty, try to query the instance using tags.
+	// Query the instance using tags.
 	asg, err := asgsvc.GetAsgByName(machinePoolScope)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to query AWSMachinePool by name")

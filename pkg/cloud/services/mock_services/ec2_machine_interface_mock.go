@@ -81,6 +81,20 @@ func (mr *MockEC2MachineInterfaceMockRecorder) CreateLaunchTemplate(arg0, arg1 i
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateLaunchTemplate", reflect.TypeOf((*MockEC2MachineInterface)(nil).CreateLaunchTemplate), arg0, arg1)
 }
 
+// DeleteLaunchTemplate mocks base method
+func (m *MockEC2MachineInterface) DeleteLaunchTemplate(arg0 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteLaunchTemplate", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteLaunchTemplate indicates an expected call of DeleteLaunchTemplate
+func (mr *MockEC2MachineInterfaceMockRecorder) DeleteLaunchTemplate(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteLaunchTemplate", reflect.TypeOf((*MockEC2MachineInterface)(nil).DeleteLaunchTemplate), arg0)
+}
+
 // DetachSecurityGroupsFromNetworkInterface mocks base method
 func (m *MockEC2MachineInterface) DetachSecurityGroupsFromNetworkInterface(arg0 []string, arg1 string) error {
 	m.ctrl.T.Helper()

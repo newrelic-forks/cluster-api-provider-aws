@@ -22,6 +22,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/autoscaling"
 	"github.com/pkg/errors"
+	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
 	expinfrav1 "sigs.k8s.io/cluster-api-provider-aws/exp/api/v1alpha3"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/awserrors"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/converters"
@@ -44,6 +45,15 @@ func (s *Service) SDKToAutoScalingGroup(v *autoscaling.Group) (*expinfrav1.AutoS
 
 	if len(v.Tags) > 0 {
 		i.Tags = converters.ASGTagsToMap(v.Tags)
+	}
+
+	if len(v.Instances) > 0 {
+		for _, autoscalingInstance := range v.Instances {
+			tmp := &infrav1.Instance{
+				ID: aws.StringValue(autoscalingInstance.InstanceId),
+			}
+			i.Instances = append(i.Instances, *tmp)
+		}
 	}
 
 	return i, nil

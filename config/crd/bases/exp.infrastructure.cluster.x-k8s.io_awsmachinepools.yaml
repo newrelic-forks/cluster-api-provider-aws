@@ -128,8 +128,13 @@ spec:
                     type: array
                   iamInstanceProfile:
                     type: string
+                  id:
+                    description: all the things needed for a launch template
+                    type: string
                   instanceType:
                     description: 'InstanceType is the type of instance to create. Example: m4.xlarge'
+                    type: string
+                  name:
                     type: string
                   networkInterfaces:
                     items:
@@ -233,9 +238,6 @@ spec:
                 type: string
               failureReason:
                 description: "ErrorReason will be set in the event that there is a terminal problem reconciling the MachinePool and will contain a succinct value suitable for machine interpretation. \n This field should not be set for transitive errors that a controller faces that are expected to be fixed automatically over time (like service outages), but instead indicate that something is fundamentally wrong with the MachinePool's spec or the configuration of the controller, and that manual intervention is required. Examples of terminal errors would be invalid combinations of settings in the spec, values that are unsupported by the controller, or the responsible controller itself being critically misconfigured. \n Any transient errors that occur during the reconciliation of MachinePools can be added as events to the MachinePool object and/or logged in the controller's output."
-                type: string
-              provisioningState:
-                description: VMState is the provisioning state of the Azure virtual machine.
                 type: string
               ready:
                 description: Ready is true when the provider resource is ready.
