@@ -278,29 +278,6 @@ func (r *AWSMachinePoolReconciler) reconcileNormal(_ context.Context, machinePoo
 	// Set state
 	// Reconcile AWSMachinePool State
 	//Handle switch case instance.State{}
-	// switch instance.State {
-	// case infrav1.InstanceStatePending:
-	// 	machineScope.SetNotReady()
-	// 	conditions.MarkFalse(machineScope.AWSMachine, infrav1.InstanceReadyCondition, infrav1.InstanceNotReadyReason, clusterv1.ConditionSeverityWarning, "")
-	// case infrav1.InstanceStateStopping, infrav1.InstanceStateStopped:
-	// 	machineScope.SetNotReady()
-	// 	conditions.MarkFalse(machineScope.AWSMachine, infrav1.InstanceReadyCondition, infrav1.InstanceStoppedReason, clusterv1.ConditionSeverityError, "")
-	// case infrav1.InstanceStateRunning:
-	// 	machineScope.SetReady()
-	// 	conditions.MarkTrue(machineScope.AWSMachine, infrav1.InstanceReadyCondition)
-	// case infrav1.InstanceStateShuttingDown, infrav1.InstanceStateTerminated:
-	// 	machineScope.SetNotReady()
-	// 	machineScope.Info("Unexpected EC2 instance termination", "state", instance.State, "instance-id", *machineScope.GetInstanceID())
-	// 	r.Recorder.Eventf(machineScope.AWSMachine, corev1.EventTypeWarning, "InstanceUnexpectedTermination", "Unexpected EC2 instance termination")
-	// 	conditions.MarkFalse(machineScope.AWSMachine, infrav1.InstanceReadyCondition, infrav1.InstanceTerminatedReason, clusterv1.ConditionSeverityError, "")
-	// default:
-	// 	machineScope.SetNotReady()
-	// 	machineScope.Info("EC2 instance state is undefined", "state", instance.State, "instance-id", *machineScope.GetInstanceID())
-	// 	r.Recorder.Eventf(machineScope.AWSMachine, corev1.EventTypeWarning, "InstanceUnhandledState", "EC2 instance state is undefined")
-	// 	machineScope.SetFailureReason(capierrors.UpdateMachineError)
-	// 	machineScope.SetFailureMessage(errors.Errorf("EC2 instance state %q is undefined", instance.State))
-	// 	conditions.MarkUnknown(machineScope.AWSMachine, infrav1.InstanceReadyCondition, "", "")
-	// }
 
 	return ctrl.Result{}, nil
 
