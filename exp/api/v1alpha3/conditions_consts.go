@@ -21,4 +21,8 @@ import clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
 const (
 	// ASGReadyCondition reports on current status of the autoscaling group. Ready indicates the group is provisioned
 	ASGReadyCondition clusterv1.ConditionType = "ASGReady"
+	// ASGNotFoundReason used when the autoscaling group couldn't be retrieved.
+	ASGNotFoundReason = "ASGNotFound"
+	// ASGProvisionFailedReason used for failures during autoscaling group provisioning.
+	ASGProvisionFailedReason = "ASGProvisionFailed"
 )
