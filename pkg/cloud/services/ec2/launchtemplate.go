@@ -60,6 +60,7 @@ func (s *Service) GetLaunchTemplate(name string) (*expinfrav1.AWSLaunchTemplate,
 	return nil, nil
 }
 
+// CreateLaunchTemplate generates a launch template to be used with the autoscaling group
 func (s *Service) CreateLaunchTemplate(scope *scope.MachinePoolScope, userData []byte) (*expinfrav1.AWSLaunchTemplate, error) {
 	s.scope.Info("Create a new launch template")
 	s.scope.Info("UserData", "UserData", string(userData))
