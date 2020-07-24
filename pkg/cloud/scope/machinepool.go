@@ -24,9 +24,12 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/klogr"
+	"k8s.io/utils/pointer"
 	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
 	expinfrav1 "sigs.k8s.io/cluster-api-provider-aws/exp/api/v1alpha3"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
+	"sigs.k8s.io/cluster-api/controllers/noderefutil"
+	capierrors "sigs.k8s.io/cluster-api/errors"
 	expclusterv1 "sigs.k8s.io/cluster-api/exp/api/v1alpha3"
 	"sigs.k8s.io/cluster-api/util/patch"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -57,8 +60,8 @@ type MachinePoolScopeParams struct {
 
 // GetProviderID returns the AWSMachine providerID from the spec.
 func (m *MachinePoolScope) GetProviderID() string {
-	if m.AWSMachinePool.Spec.ProviderID != nil {
-		return *m.AWSMachinePool.Spec.ProviderID
+	if m.AWSMachinePool.Spec.ProviderID != "" {
+		return m.AWSMachinePool.Spec.ProviderID
 	}
 	return ""
 }
@@ -163,4 +166,36 @@ func (m *MachinePoolScope) PatchObject() error {
 // Close the MachinePoolScope by updating the machinepool spec, machine status.
 func (m *MachinePoolScope) Close() error {
 	return m.PatchObject()
+}
+
+// SetAnnotation sets a key value annotation on the AWSMachine.
+func (m *MachinePoolScope) SetAnnotation(key, value string) {
+	if m.AWSMachinePool.Annotations == nil {
+		m.AWSMachinePool.Annotations = map[string]string{}
+	}
+	m.AWSMachinePool.Annotations[key] = value
+}
+
+// SetReady sets the AWSMachinePool Ready Status
+func (m *MachinePoolScope) SetReady() {
+	m.AWSMachinePool.Status.Ready = true
+}
+
+// GetID returns the AWSMachinePool ID by parsing Spec.ProviderID.
+func (m *MachinePoolScope) GetID() *string {
+	parsed, err := noderefutil.NewProviderID(m.AWSMachinePool.Spec.ProviderID)
+	if err != nil {
+		return nil
+	}
+	return pointer.StringPtr(parsed.ID())
+}
+
+// SetFailureReason sets the AWSMachinePool status failure reason.
+func (m *MachinePoolScope) SetFailureReason(v capierrors.MachineStatusError) {
+	m.AWSMachinePool.Status.FailureReason = &v
+}
+
+// SetFailureMessage sets the AWSMachinePool status failure message.
+func (m *MachinePoolScope) SetFailureMessage(v error) {
+	m.AWSMachinePool.Status.FailureMessage = pointer.StringPtr(v.Error())
 }

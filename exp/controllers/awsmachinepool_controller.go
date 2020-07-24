@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 
 	"sigs.k8s.io/cluster-api/controllers/noderefutil"
 	"sigs.k8s.io/cluster-api/util"
@@ -246,7 +247,7 @@ func (r *AWSMachinePoolReconciler) reconcileNormal(_ context.Context, machinePoo
 	if asg == nil {
 
 		// Create new ASG
-		_, err = r.createPool(machinePoolScope, clusterScope)
+		asg, err = r.createPool(machinePoolScope, clusterScope)
 		if err != nil {
 			conditions.MarkFalse(machinePoolScope.AWSMachinePool, expinfrav1.ASGReadyCondition, expinfrav1.ASGProvisionFailedReason, clusterv1.ConditionSeverityError, err.Error())
 			return ctrl.Result{}, err
@@ -255,7 +256,21 @@ func (r *AWSMachinePoolReconciler) reconcileNormal(_ context.Context, machinePoo
 	}
 
 	// Make sure Spec.ProviderID is always set.
-	// machinePoolScope.SetProviderID(instance.ID, instance.AvailabilityZone)
+	machinePoolScope.AWSMachinePool.Spec.ProviderID = fmt.Sprintf("%s", asg.ID)
+	providerIDList := make([]string, len(asg.Instances))
+	var readyCount int32
+	for i, ec2 := range asg.Instances {
+		providerIDList[i] = fmt.Sprintf("aws:///%s/%s", ec2.AvailabilityZone, ec2.ID)
+		// if ec2.State == infrav1.InstanceStateRunning {
+		// 	readyCount++
+		// }
+	}
+	machinePoolScope.AWSMachinePool.Spec.ProviderIDList = providerIDList
+	// TODO: update awsmachinepool status
+	// machinePoolScope.AWSMachinePool.Status.ProvisioningState = &asg.State
+	// machinePoolScope.AWSMachinePool.Status.Replicas = int32(len(providerIDList))
+	machinePoolScope.SetAnnotation("cluster-api-provider-aws", "true")
+
 	// Get state of ASG
 	// Set state
 	// Reconcile AWSMachinePool State

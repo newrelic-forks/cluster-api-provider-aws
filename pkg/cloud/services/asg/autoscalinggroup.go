@@ -33,6 +33,7 @@ import (
 // SDKToAugoScalingGroup populates all AugoScalingGroup fields
 func (s *Service) SDKToAutoScalingGroup(v *autoscaling.Group) (*expinfrav1.AutoScalingGroup, error) {
 	i := &expinfrav1.AutoScalingGroup{
+		ID:   aws.StringValue(v.AutoScalingGroupARN),
 		Name: aws.StringValue(v.AutoScalingGroupName),
 		//TODO: determine what additional values go here and what else should be in the struct
 	}

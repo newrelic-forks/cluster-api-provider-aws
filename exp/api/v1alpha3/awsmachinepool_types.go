@@ -28,7 +28,7 @@ const (
 
 // AWSMachinePoolSpec defines the desired state of AWSMachinePool
 type AWSMachinePoolSpec struct {
-	ProviderID                       *string              `json:"providerID,omitempty"` //TODO: is this needed?
+	ProviderID                       string               `json:"providerID,omitempty"` //TODO: is this needed?
 	AutoScalingGroupName             string               `json:"autoScalingGroupName,omitempty"`
 	MixedInstancesPolicy             MixedInstancesPolicy `json:"mixedInstancesPolicy,omitempty"`
 	MinSize                          int                  `json:"minSize,omitempty"`
@@ -44,6 +44,11 @@ type AWSMachinePoolSpec struct {
 	NewInstancesProtectedFromScaleIn bool                 `json:"newInstancesProtectedFromScaleIn,omitempty"`
 	ServiceLinkedRoleARN             string               `json:"serviceLinkedRoleARN,omitempty"`
 	AWSLaunchTemplate                AWSLaunchTemplate    `json:"awsLaunchTemplate,omitempty"`
+
+	// ProviderIDList are the identification IDs of machine instances provided by the provider.
+	// This field must match the provider IDs as seen on the node objects corresponding to a machine pool's machine instances.
+	// +optional
+	ProviderIDList []string `json:"providerIDList,omitempty"`
 
 	// AdditionalSecurityGroups is an array of references to security groups that should be applied to the
 	// instance. These security groups would be set in addition to any security groups defined

@@ -100,6 +100,7 @@ type Tags map[string]string
 // AutoScalingGroup describes an AWS autoscaling group.
 type AutoScalingGroup struct {
 	// The tags associated with the instance.
+	ID              string            `json:"id,omitempty"`
 	Tags            map[string]string `json:"tags,omitempty"`
 	Name            string            `json:"name,omitempty"`
 	DesiredCapacity int64             `json:"desiredCapacity,omitempty"`
