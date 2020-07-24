@@ -206,6 +206,7 @@ func (r *AWSMachinePoolReconciler) reconcileNormal(_ context.Context, machinePoo
 	// If the AWSMachinepool doesn't have our finalizer, add it
 	controllerutil.AddFinalizer(machinePoolScope.AWSMachinePool, expinfrav1.MachinePoolFinalizer)
 
+<<<<<<< HEAD
 	// Register finalizer immediately to avoid orphaning AWS resources
 	if err := machinePoolScope.PatchObject(); err != nil {
 		return ctrl.Result{}, err
@@ -218,12 +219,13 @@ func (r *AWSMachinePoolReconciler) reconcileNormal(_ context.Context, machinePoo
 >>>>>>> 824252c3... wip: pushing status additions
 	// todo: check cluster InfrastructureReady
 =======
+=======
+>>>>>>> 312856ef... fix: resolving conflict
 	if !machinePoolScope.Cluster.Status.InfrastructureReady {
 		machinePoolScope.Info("Cluster infrastructure is not ready yet")
 		conditions.MarkFalse(machinePoolScope.AWSMachinePool, expinfrav1.ASGReady, infrav1.WaitingForClusterInfrastructureReason, clusterv1.ConditionSeverityInfo, "")
 		return ctrl.Result{}, nil
 	}
->>>>>>> d88289c9... wip: pushing status additions
 
 	// Make sure bootstrap data is available and populated
 	if machinePoolScope.MachinePool.Spec.Template.Spec.Bootstrap.DataSecretName == nil {
