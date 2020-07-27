@@ -58,8 +58,6 @@ func (s *Service) GetLaunchTemplate(name string) (*expinfrav1.AWSLaunchTemplate,
 // CreateLaunchTemplate generates a launch template to be used with the autoscaling group
 func (s *Service) CreateLaunchTemplate(scope *scope.MachinePoolScope, userData []byte) (*expinfrav1.AWSLaunchTemplate, error) {
 	s.scope.Info("Create a new launch template")
-	s.scope.Info("UserData", "UserData", string(userData))
-	s.scope.Info(scope.Name())
 
 	launchTemplateData, err := s.createLaunchTemplateData(scope, userData)
 	if err != nil {
@@ -120,7 +118,6 @@ func (s *Service) createLaunchTemplateData(scope *scope.MachinePoolScope, userDa
 	lt := scope.AWSMachinePool.Spec.AWSLaunchTemplate
 
 	data := &ec2.RequestLaunchTemplateData{
-		ImageId:      lt.AMI.ID,
 		InstanceType: aws.String(lt.InstanceType),
 		IamInstanceProfile: &ec2.LaunchTemplateIamInstanceProfileSpecificationRequest{
 			Name: aws.String(lt.IamInstanceProfile),
@@ -201,6 +198,39 @@ func (s *Service) createLaunchTemplateData(scope *scope.MachinePoolScope, userDa
 		data.SecurityGroupIds = append(data.SecurityGroupIds, additionalGroup.ID)
 	}
 	s.scope.Info("Security Groups", "security groups", data.SecurityGroupIds)
+
+	// Pick image from the machinepool configuration, or use a default one.
+	if scope.AWSMachinePool.Spec.AWSLaunchTemplate.AMI.ID != nil { // nolint:nestif
+		data.ImageId = scope.AWSMachinePool.Spec.AWSLaunchTemplate.AMI.ID
+	} else {
+		if scope.MachinePool.Spec.Template.Spec.Version == nil {
+			err := errors.New("Either AWSMachinePool's spec.awslaunchtemplate.ami.id or MachinePool's spec.template.spec.version must be defined")
+			s.scope.Error(err, "")
+			return nil, err
+		}
+
+		imageLookupFormat := scope.AWSMachinePool.Spec.AWSLaunchTemplate.ImageLookupFormat
+		if imageLookupFormat == "" {
+			imageLookupFormat = scope.AWSCluster.Spec.ImageLookupFormat
+		}
+
+		imageLookupOrg := scope.AWSMachinePool.Spec.AWSLaunchTemplate.ImageLookupOrg
+		if imageLookupOrg == "" {
+			imageLookupOrg = scope.AWSCluster.Spec.ImageLookupOrg
+		}
+
+		imageLookupBaseOS := scope.AWSMachinePool.Spec.AWSLaunchTemplate.ImageLookupBaseOS
+		if imageLookupBaseOS == "" {
+			imageLookupBaseOS = scope.AWSCluster.Spec.ImageLookupBaseOS
+		}
+
+		lookupAMI, err := s.defaultAMILookup(imageLookupFormat, imageLookupOrg, imageLookupBaseOS, *scope.MachinePool.Spec.Template.Spec.Version)
+
+		if err != nil {
+			return nil, err
+		}
+		data.ImageId = aws.String(lookupAMI)
+	}
 
 	return data, nil
 }
