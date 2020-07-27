@@ -200,8 +200,8 @@ func (s *Service) createLaunchTemplateData(scope *scope.MachinePoolScope, userDa
 	s.scope.Info("Security Groups", "security groups", data.SecurityGroupIds)
 
 	// Pick image from the machinepool configuration, or use a default one.
-	if scope.AWSMachinePool.Spec.AWSLaunchTemplate.AMI.ID != nil { // nolint:nestif
-		data.ImageId = scope.AWSMachinePool.Spec.AWSLaunchTemplate.AMI.ID
+	if lt.AMI.ID != nil { // nolint:nestif
+		data.ImageId = lt.AMI.ID
 	} else {
 		if scope.MachinePool.Spec.Template.Spec.Version == nil {
 			err := errors.New("Either AWSMachinePool's spec.awslaunchtemplate.ami.id or MachinePool's spec.template.spec.version must be defined")
@@ -209,17 +209,17 @@ func (s *Service) createLaunchTemplateData(scope *scope.MachinePoolScope, userDa
 			return nil, err
 		}
 
-		imageLookupFormat := scope.AWSMachinePool.Spec.AWSLaunchTemplate.ImageLookupFormat
+		imageLookupFormat := lt.ImageLookupFormat
 		if imageLookupFormat == "" {
 			imageLookupFormat = scope.AWSCluster.Spec.ImageLookupFormat
 		}
 
-		imageLookupOrg := scope.AWSMachinePool.Spec.AWSLaunchTemplate.ImageLookupOrg
+		imageLookupOrg := lt.ImageLookupOrg
 		if imageLookupOrg == "" {
 			imageLookupOrg = scope.AWSCluster.Spec.ImageLookupOrg
 		}
 
-		imageLookupBaseOS := scope.AWSMachinePool.Spec.AWSLaunchTemplate.ImageLookupBaseOS
+		imageLookupBaseOS := lt.ImageLookupBaseOS
 		if imageLookupBaseOS == "" {
 			imageLookupBaseOS = scope.AWSCluster.Spec.ImageLookupBaseOS
 		}
