@@ -17,13 +17,20 @@ limitations under the License.
 package eks
 
 import (
+	"context"
 	"testing"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/eks"
+	"github.com/golang/mock/gomock"
 	. "github.com/onsi/gomega"
+	"github.com/pkg/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
 	infrav1exp "sigs.k8s.io/cluster-api-provider-aws/exp/api/v1alpha3"
+	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/scope"
+	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/services/eks/mock_eksiface"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
 )
 
 func TestMakeEksEncryptionConfigs(t *testing.T) {
@@ -222,6 +229,104 @@ func TestMakeEKSLogging(t *testing.T) {
 			g := NewWithT(t)
 			logging := makeEksLogging(tc.input)
 			g.Expect(logging).To(Equal(tc.expect))
+		})
+	}
+}
+
+func TestReconcileClusterVersion(t *testing.T) {
+	clusterName := "cluster"
+	tests := []struct {
+		name        string
+		expect      func(m *mock_eksiface.MockEKSAPIMockRecorder)
+		expectError bool
+	}{
+		{
+			name: "no upgrade necessary",
+			expect: func(m *mock_eksiface.MockEKSAPIMockRecorder) {
+				m.
+					DescribeCluster(gomock.AssignableToTypeOf(&eks.DescribeClusterInput{})).
+					Return(&eks.DescribeClusterOutput{
+						Cluster: &eks.Cluster{
+							Name:    aws.String("cluster"),
+							Version: aws.String("1.16"),
+						},
+					}, nil)
+			},
+			expectError: false,
+		},
+		{
+			name: "needs upgrade",
+			expect: func(m *mock_eksiface.MockEKSAPIMockRecorder) {
+				m.
+					DescribeCluster(gomock.AssignableToTypeOf(&eks.DescribeClusterInput{})).
+					Return(&eks.DescribeClusterOutput{
+						Cluster: &eks.Cluster{
+							Name:    aws.String("cluster"),
+							Version: aws.String("1.14"),
+						},
+					}, nil)
+				m.
+					UpdateClusterVersion(gomock.AssignableToTypeOf(&eks.UpdateClusterVersionInput{})).
+					Return(&eks.UpdateClusterVersionOutput{}, nil)
+			},
+			expectError: false,
+		},
+		{
+			name: "api error",
+			expect: func(m *mock_eksiface.MockEKSAPIMockRecorder) {
+				m.
+					DescribeCluster(gomock.AssignableToTypeOf(&eks.DescribeClusterInput{})).
+					Return(&eks.DescribeClusterOutput{
+						Cluster: &eks.Cluster{
+							Name:    aws.String("cluster"),
+							Version: aws.String("1.14"),
+						},
+					}, nil)
+				m.
+					UpdateClusterVersion(gomock.AssignableToTypeOf(&eks.UpdateClusterVersionInput{})).
+					Return(&eks.UpdateClusterVersionOutput{}, errors.New(""))
+			},
+			expectError: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			g := NewWithT(t)
+
+			mockControl := gomock.NewController(t)
+			defer mockControl.Finish()
+
+			eksMock := mock_eksiface.NewMockEKSAPI(mockControl)
+
+			scope, err := scope.NewManagedControlPlaneScope(scope.ManagedControlPlaneScopeParams{
+				Cluster: &clusterv1.Cluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "ns",
+						Name:      clusterName,
+					},
+				},
+				ControlPlane: &infrav1exp.AWSManagedControlPlane{
+					Spec: infrav1exp.AWSManagedControlPlaneSpec{
+						Version: aws.String("1.16"),
+					},
+				},
+			})
+			g.Expect(err).To(BeNil())
+
+			tc.expect(eksMock.EXPECT())
+			s := NewService(scope)
+			s.EKSClient = eksMock
+
+			cluster, err := s.describeEKSCluster()
+			g.Expect(err).To(BeNil())
+
+			err = s.reconcileClusterVersion(context.TODO(), cluster)
+			if tc.expectError {
+				g.Expect(err).To(HaveOccurred())
+				return
+			}
+			g.Expect(err).To(BeNil())
 		})
 	}
 }
