@@ -180,3 +180,48 @@ func TestPublicAccessCIDRsEqual(t *testing.T) {
 		})
 	}
 }
+
+func TestMakeEKSLogging(t *testing.T) {
+	testCases := []struct {
+		name   string
+		input  *infrav1exp.ControlPlaneLoggingSpec
+		expect *eks.Logging
+	}{
+		{
+			name:   "no subnets",
+			input:  nil,
+			expect: nil,
+		},
+		{
+			name: "some enabled, some disabled",
+			input: &infrav1exp.ControlPlaneLoggingSpec{
+				APIServer: true,
+				Audit:     false,
+			},
+			expect: &eks.Logging{
+				ClusterLogging: []*eks.LogSetup{
+					{
+						Enabled: aws.Bool(true),
+						Types:   []*string{aws.String(eks.LogTypeApi)},
+					},
+					{
+						Enabled: aws.Bool(false),
+						Types: []*string{
+							aws.String(eks.LogTypeAudit),
+							aws.String(eks.LogTypeAuthenticator),
+							aws.String(eks.LogTypeControllerManager),
+							aws.String(eks.LogTypeScheduler),
+						},
+					},
+				},
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			g := NewWithT(t)
+			logging := makeEksLogging(tc.input)
+			g.Expect(logging).To(Equal(tc.expect))
+		})
+	}
+}
