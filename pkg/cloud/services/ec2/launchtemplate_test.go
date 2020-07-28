@@ -179,6 +179,7 @@ func TestService_createLaunchTemplateData(t *testing.T) {
 			name:   "nil root volume",
 			fields: fields{
 				// EC2Client: ec2iface.EC2API,
+
 			},
 			args: args{
 				scope: &scope.MachinePoolScope{
