@@ -263,8 +263,8 @@ func (s *Service) UpdateASG(scope *scope.MachinePoolScope) error {
 		input.MixedInstancesPolicy = createSDKMixedInstancesPolicy(scope.Name(), scope.AWSMachinePool.Spec.MixedInstancesPolicy)
 	} else {
 		input.LaunchTemplate = &autoscaling.LaunchTemplateSpecification{
-			LaunchTemplateName: aws.String(scope.AWSMachinePool.Status.LaunchTemplateID),
-			Version:            aws.String(launchTemplateLatestVersion),
+			LaunchTemplateId: aws.String(scope.AWSMachinePool.Status.LaunchTemplateID),
+			Version:          aws.String(launchTemplateLatestVersion),
 		}
 	}
 
