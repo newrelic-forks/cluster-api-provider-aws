@@ -154,3 +154,96 @@ func TestService_SDKToLaunchTemplate(t *testing.T) {
 		})
 	}
 }
+
+func TestService_LaunchTemplateNeedsUpdate(t *testing.T) {
+	tests := []struct {
+		name     string
+		incoming *expinfrav1.AWSLaunchTemplate
+		existing *expinfrav1.AWSLaunchTemplate
+		want     bool
+		wantErr  bool
+	}{
+		{
+			name: "the same security groups",
+			incoming: &expinfrav1.AWSLaunchTemplate{
+				AdditionalSecurityGroups: []infrav1.AWSResourceReference{
+					{ID: aws.String("sg-999")},
+				},
+			},
+			existing: &expinfrav1.AWSLaunchTemplate{
+				AdditionalSecurityGroups: []infrav1.AWSResourceReference{
+					{ID: aws.String("sg-111")},
+					{ID: aws.String("sg-222")},
+					{ID: aws.String("sg-999")},
+				},
+			},
+			want:    false,
+			wantErr: false,
+		},
+		{
+			name: "core security group removed externally",
+			incoming: &expinfrav1.AWSLaunchTemplate{
+				AdditionalSecurityGroups: []infrav1.AWSResourceReference{
+					{ID: aws.String("sg-999")},
+				},
+			},
+			existing: &expinfrav1.AWSLaunchTemplate{
+				AdditionalSecurityGroups: []infrav1.AWSResourceReference{
+					{ID: aws.String("sg-222")},
+					{ID: aws.String("sg-999")},
+				},
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "new additional security group",
+			incoming: &expinfrav1.AWSLaunchTemplate{
+				AdditionalSecurityGroups: []infrav1.AWSResourceReference{
+					{ID: aws.String("sg-999")},
+					{ID: aws.String("sg-000")},
+				},
+			},
+			existing: &expinfrav1.AWSLaunchTemplate{
+				AdditionalSecurityGroups: []infrav1.AWSResourceReference{
+					{ID: aws.String("sg-111")},
+					{ID: aws.String("sg-222")},
+					{ID: aws.String("sg-999")},
+				},
+			},
+			want:    true,
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := &Service{
+				scope: &scope.ClusterScope{
+					AWSCluster: &infrav1.AWSCluster{
+						Status: infrav1.AWSClusterStatus{
+							Network: infrav1.Network{
+								SecurityGroups: map[infrav1.SecurityGroupRole]infrav1.SecurityGroup{
+									infrav1.SecurityGroupNode: {
+										ID: "sg-111",
+									},
+									infrav1.SecurityGroupLB: {
+										ID: "sg-222",
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			got, err := s.LaunchTemplateNeedsUpdate(tt.incoming, tt.existing)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("error mismatch: got = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("result mismatch: got = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

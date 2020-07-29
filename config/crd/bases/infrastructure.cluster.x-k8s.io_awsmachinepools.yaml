@@ -18,7 +18,20 @@ spec:
     singular: awsmachinepool
   scope: Namespaced
   versions:
-  - name: v1alpha3
+  - additionalPrinterColumns:
+    - description: Machine ready status
+      jsonPath: .status.ready
+      name: Ready
+      type: string
+    - description: Machine ready status
+      jsonPath: .status.replicas
+      name: Replicas
+      type: integer
+    - description: Launch Template ID
+      jsonPath: .status.launchTemplateID
+      name: LaunchTemplate ID
+      type: string
+    name: v1alpha3
     schema:
       openAPIV3Schema:
         description: AWSMachinePool is the Schema for the awsmachinepools API
@@ -34,37 +47,6 @@ spec:
           spec:
             description: AWSMachinePoolSpec defines the desired state of AWSMachinePool
             properties:
-              additionalSecurityGroups:
-                description: AdditionalSecurityGroups is an array of references to security groups that should be applied to the instances. These security groups would be set in addition to any security groups defined at the cluster level or in the actuator.
-                items:
-                  description: AWSResourceReference is a reference to a specific AWS resource by ID, ARN, or filters. Only one of ID, ARN or Filters may be specified. Specifying more than one will result in a validation error.
-                  properties:
-                    arn:
-                      description: ARN of resource
-                      type: string
-                    filters:
-                      description: 'Filters is a set of key/value pairs used to identify a resource They are applied according to the rules defined by the AWS API: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/Using_Filtering.html'
-                      items:
-                        description: Filter is a filter used to identify an AWS resource
-                        properties:
-                          name:
-                            description: Name of the filter. Filter names are case-sensitive.
-                            type: string
-                          values:
-                            description: Values includes one or more filter values. Filter values are case-sensitive.
-                            items:
-                              type: string
-                            type: array
-                        required:
-                        - name
-                        - values
-                        type: object
-                      type: array
-                    id:
-                      description: ID of resource
-                      type: string
-                  type: object
-                type: array
               additionalTags:
                 additionalProperties:
                   type: string
@@ -79,6 +61,37 @@ spec:
               awsLaunchTemplate:
                 description: AwsLaunchTemplate defines the desired state of AWSLaunchTemplate
                 properties:
+                  additionalSecurityGroups:
+                    description: AdditionalSecurityGroups is an array of references to security groups that should be applied to the instances. These security groups would be set in addition to any security groups defined at the cluster level or in the actuator.
+                    items:
+                      description: AWSResourceReference is a reference to a specific AWS resource by ID, ARN, or filters. Only one of ID, ARN or Filters may be specified. Specifying more than one will result in a validation error.
+                      properties:
+                        arn:
+                          description: ARN of resource
+                          type: string
+                        filters:
+                          description: 'Filters is a set of key/value pairs used to identify a resource They are applied according to the rules defined by the AWS API: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/Using_Filtering.html'
+                          items:
+                            description: Filter is a filter used to identify an AWS resource
+                            properties:
+                              name:
+                                description: Name of the filter. Filter names are case-sensitive.
+                                type: string
+                              values:
+                                description: Values includes one or more filter values. Filter values are case-sensitive.
+                                items:
+                                  type: string
+                                type: array
+                            required:
+                            - name
+                            - values
+                            type: object
+                          type: array
+                        id:
+                          description: ID of resource
+                          type: string
+                      type: object
+                    type: array
                   ami:
                     description: 'todo: use a helper'
                     properties:

@@ -84,6 +84,12 @@ type AWSLaunchTemplate struct {
 	SSHKeyName *string `json:"sshKeyName,omitempty"`
 
 	VersionNumber *int64 `json:"versionNumber,omitempty"`
+
+	// AdditionalSecurityGroups is an array of references to security groups that should be applied to the
+	// instances. These security groups would be set in addition to any security groups defined
+	// at the cluster level or in the actuator.
+	// +optional
+	AdditionalSecurityGroups []infrav1.AWSResourceReference `json:"additionalSecurityGroups,omitempty"`
 }
 
 // Overrides from describe-auto-scaling-groups
@@ -141,20 +147,3 @@ var (
 	// ASGStatusDeleteInProgress is the string representing an ASG that is currently deleting
 	ASGStatusDeleteInProgress = ASGStatus("Delete in progress")
 )
-
-// launchTemplateNeedsUpdate checks if a new launch template version is needed
-func LaunchTemplateNeedsUpdate(incoming *AWSLaunchTemplate, existing *AWSLaunchTemplate) bool {
-	if incoming.IamInstanceProfile != existing.IamInstanceProfile {
-		return true
-	}
-
-	if incoming.InstanceType != existing.InstanceType {
-		return true
-	}
-
-	// todo: security groups
-	// todo: block devices
-	// todo: more fields
-
-	return false
-}

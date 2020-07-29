@@ -50,8 +50,9 @@ type EC2MachineInterface interface {
 
 	GetLaunchTemplate(id string) (*expinfrav1.AWSLaunchTemplate, error)
 	CreateLaunchTemplate(scope *scope.MachinePoolScope, userData []byte) (string, error)
-	CreateLaunchTemplateVersion(scope *scope.MachinePoolScope, userData []byte) (*expinfrav1.AWSLaunchTemplate, error)
+	CreateLaunchTemplateVersion(scope *scope.MachinePoolScope, userData []byte) error
 	DeleteLaunchTemplate(id string) error
+	LaunchTemplateNeedsUpdate(incoming *expinfrav1.AWSLaunchTemplate, existing *expinfrav1.AWSLaunchTemplate) (bool, error)
 }
 
 // SecretsManagerInterface encapsulated the methods exposed to the

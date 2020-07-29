@@ -25,7 +25,8 @@ import (
 )
 
 const (
-	MachinePoolFinalizer = "awsmachinepool.infrastructure.cluster.x-k8s.io"
+	MachinePoolFinalizer        = "awsmachinepool.infrastructure.cluster.x-k8s.io"
+	LaunchTemplateLatestVersion = "$Latest"
 )
 
 // AWSMachinePoolSpec defines the desired state of AWSMachinePool
@@ -47,12 +48,6 @@ type AWSMachinePoolSpec struct {
 	// This field must match the provider IDs as seen on the node objects corresponding to a machine pool's machine instances.
 	// +optional
 	ProviderIDList []string `json:"providerIDList,omitempty"`
-
-	// AdditionalSecurityGroups is an array of references to security groups that should be applied to the
-	// instances. These security groups would be set in addition to any security groups defined
-	// at the cluster level or in the actuator.
-	// +optional
-	AdditionalSecurityGroups []infrav1.AWSResourceReference `json:"additionalSecurityGroups,omitempty"`
 }
 
 // AWSMachinePoolStatus defines the observed state of AWSMachinePool
@@ -111,6 +106,9 @@ type AWSMachinePoolStatus struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:path=awsmachinepools,scope=Namespaced,categories=cluster-api
+// +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.ready",description="Machine ready status"
+// +kubebuilder:printcolumn:name="Replicas",type="integer",JSONPath=".status.replicas",description="Machine ready status"
+// +kubebuilder:printcolumn:name="LaunchTemplate ID",type="string",JSONPath=".status.launchTemplateID",description="Launch Template ID"
 
 // AWSMachinePool is the Schema for the awsmachinepools API
 type AWSMachinePool struct {

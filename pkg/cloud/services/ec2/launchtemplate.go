@@ -18,10 +18,11 @@ package ec2
 
 import (
 	"encoding/base64"
+	"reflect"
+	"sort"
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/pkg/errors"
 	"k8s.io/utils/pointer"
@@ -34,10 +35,15 @@ import (
 // GetLaunchTemplate returns the existing LaunchTemplate or nothing if it doesn't exist.
 // For now by name until we need the input to be something different
 func (s *Service) GetLaunchTemplate(id string) (*expinfrav1.AWSLaunchTemplate, error) {
+	if id == "" {
+		return nil, nil
+	}
+
 	s.scope.V(2).Info("Looking for existing LaunchTemplates")
 
 	input := &ec2.DescribeLaunchTemplateVersionsInput{
 		LaunchTemplateId: aws.String(id),
+		Versions:         aws.StringSlice([]string{expinfrav1.LaunchTemplateLatestVersion}),
 	}
 
 	out, err := s.EC2Client.DescribeLaunchTemplateVersions(input)
@@ -48,11 +54,11 @@ func (s *Service) GetLaunchTemplate(id string) (*expinfrav1.AWSLaunchTemplate, e
 		s.scope.Info("", "aerr", err.Error())
 	}
 
-	for _, version := range out.LaunchTemplateVersions {
-		return s.SDKToLaunchTemplate(version)
+	if len(out.LaunchTemplateVersions) == 0 {
+		return nil, nil
 	}
 
-	return nil, nil
+	return s.SDKToLaunchTemplate(out.LaunchTemplateVersions[0])
 }
 
 // CreateLaunchTemplate generates a launch template to be used with the autoscaling group
@@ -76,33 +82,25 @@ func (s *Service) CreateLaunchTemplate(scope *scope.MachinePoolScope, userData [
 	return aws.StringValue(result.LaunchTemplate.LaunchTemplateId), nil
 }
 
-func (s *Service) CreateLaunchTemplateVersion(scope *scope.MachinePoolScope, userData []byte) (*expinfrav1.AWSLaunchTemplate, error) {
+func (s *Service) CreateLaunchTemplateVersion(scope *scope.MachinePoolScope, userData []byte) error {
 	s.scope.V(2).Info("creating new launch template version", "machine-pool", scope.Name())
 
 	launchTemplateData, err := s.createLaunchTemplateData(scope, userData)
 	if err != nil {
-		return nil, errors.Wrapf(err, "unable to form launch template data")
+		return errors.Wrapf(err, "unable to form launch template data")
 	}
 
 	input := &ec2.CreateLaunchTemplateVersionInput{
 		LaunchTemplateData: launchTemplateData,
-		LaunchTemplateName: aws.String(scope.Name()),
+		LaunchTemplateId:   aws.String(scope.AWSMachinePool.Status.LaunchTemplateID),
 	}
 
-	result, err := s.EC2Client.CreateLaunchTemplateVersion(input)
+	_, err = s.EC2Client.CreateLaunchTemplateVersion(input)
 	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			s.scope.Info("", "aerr", aerr.Error())
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			s.scope.Info("", "error", err.Error())
-		}
+		return errors.Wrapf(err, "unable to create launch template version")
 	}
 
-	s.scope.Info("launch template updated", "version", result.LaunchTemplateVersion.VersionNumber)
-
-	return nil, nil
+	return nil
 }
 
 func (s *Service) createLaunchTemplateData(scope *scope.MachinePoolScope, userData []byte) (*ec2.RequestLaunchTemplateData, error) {
@@ -146,15 +144,13 @@ func (s *Service) createLaunchTemplateData(scope *scope.MachinePoolScope, userDa
 	}
 
 	for _, id := range ids {
-		s.scope.Info(id)
 		data.SecurityGroupIds = append(data.SecurityGroupIds, aws.String(id))
 	}
 
 	// add additional security groups as well
-	for _, additionalGroup := range scope.AWSMachinePool.Spec.AdditionalSecurityGroups {
+	for _, additionalGroup := range scope.AWSMachinePool.Spec.AWSLaunchTemplate.AdditionalSecurityGroups {
 		data.SecurityGroupIds = append(data.SecurityGroupIds, additionalGroup.ID)
 	}
-	s.scope.Info("Security Groups", "security groups", data.SecurityGroupIds)
 
 	// Pick image from the machinepool configuration, or use a default one.
 	if lt.AMI.ID != nil { // nolint:nestif
@@ -277,5 +273,51 @@ func (s *Service) SDKToLaunchTemplate(d *ec2.LaunchTemplateVersion) (*expinfrav1
 		i.NetworkInterfaces = append(i.NetworkInterfaces, *tmp)
 	}
 
+	for _, id := range v.SecurityGroupIds {
+		// This will include the core security groups as well, making the "Additional" a bit
+		// dishonest. However, including the core groups drastically simplifies comparison with
+		// the incoming security groups.
+		i.AdditionalSecurityGroups = append(i.AdditionalSecurityGroups, infrav1.AWSResourceReference{ID: id})
+	}
+
 	return i, nil
+}
+
+// LaunchTemplateNeedsUpdate checks if a new launch template version is needed
+func (s *Service) LaunchTemplateNeedsUpdate(incoming *expinfrav1.AWSLaunchTemplate, existing *expinfrav1.AWSLaunchTemplate) (bool, error) {
+	if incoming.IamInstanceProfile != existing.IamInstanceProfile {
+		return true, nil
+	}
+
+	if incoming.InstanceType != existing.InstanceType {
+		return true, nil
+	}
+
+	incomingIDs := make([]string, len(incoming.AdditionalSecurityGroups))
+	for i, ref := range incoming.AdditionalSecurityGroups {
+		incomingIDs[i] = aws.StringValue(ref.ID)
+	}
+
+	coreIDs, err := s.GetCoreNodeSecurityGroups()
+	if err != nil {
+		return false, err
+	}
+
+	incomingIDs = append(incomingIDs, coreIDs...)
+
+	existingIDs := make([]string, len(existing.AdditionalSecurityGroups))
+	for i, ref := range existing.AdditionalSecurityGroups {
+		existingIDs[i] = aws.StringValue(ref.ID)
+	}
+
+	sort.Strings(incomingIDs)
+	sort.Strings(existingIDs)
+
+	if !reflect.DeepEqual(incomingIDs, existingIDs) {
+		return true, nil
+	}
+
+	// todo: tags
+
+	return false, nil
 }

@@ -82,12 +82,11 @@ func (mr *MockEC2MachineInterfaceMockRecorder) CreateLaunchTemplate(arg0, arg1 i
 }
 
 // CreateLaunchTemplateVersion mocks base method
-func (m *MockEC2MachineInterface) CreateLaunchTemplateVersion(arg0 *scope.MachinePoolScope, arg1 []byte) (*v1alpha30.AWSLaunchTemplate, error) {
+func (m *MockEC2MachineInterface) CreateLaunchTemplateVersion(arg0 *scope.MachinePoolScope, arg1 []byte) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CreateLaunchTemplateVersion", arg0, arg1)
-	ret0, _ := ret[0].(*v1alpha30.AWSLaunchTemplate)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
 // CreateLaunchTemplateVersion indicates an expected call of CreateLaunchTemplateVersion
@@ -197,6 +196,21 @@ func (m *MockEC2MachineInterface) InstanceIfExists(arg0 *string) (*v1alpha3.Inst
 func (mr *MockEC2MachineInterfaceMockRecorder) InstanceIfExists(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstanceIfExists", reflect.TypeOf((*MockEC2MachineInterface)(nil).InstanceIfExists), arg0)
+}
+
+// LaunchTemplateNeedsUpdate mocks base method
+func (m *MockEC2MachineInterface) LaunchTemplateNeedsUpdate(arg0, arg1 *v1alpha30.AWSLaunchTemplate) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LaunchTemplateNeedsUpdate", arg0, arg1)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// LaunchTemplateNeedsUpdate indicates an expected call of LaunchTemplateNeedsUpdate
+func (mr *MockEC2MachineInterfaceMockRecorder) LaunchTemplateNeedsUpdate(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LaunchTemplateNeedsUpdate", reflect.TypeOf((*MockEC2MachineInterface)(nil).LaunchTemplateNeedsUpdate), arg0, arg1)
 }
 
 // TerminateInstance mocks base method
