@@ -191,7 +191,14 @@ func (r *AWSMachinePoolReconciler) SetupWithManager(mgr ctrl.Manager) error {
 func (r *AWSMachinePoolReconciler) reconcileNormal(_ context.Context, machinePoolScope *scope.MachinePoolScope, clusterScope *scope.ClusterScope) (ctrl.Result, error) {
 	clusterScope.Info("Reconciling AWSMachinePool")
 
-	// todo: check for failure state, return early
+	// If the AWSMachine is in an error state, return early.
+	if machinePoolScope.HasFailed() {
+		machinePoolScope.Info("Error state detected, skipping reconciliation")
+
+		// TODO: If we are in a failed state, delete the secret regardless of instance state
+
+		return ctrl.Result{}, nil
+	}
 
 	// If the AWSMachinepool doesn't have our finalizer, add it
 	controllerutil.AddFinalizer(machinePoolScope.AWSMachinePool, expinfrav1.MachinePoolFinalizer)

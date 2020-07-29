@@ -130,9 +130,8 @@ type AutoScalingGroup struct {
 	Subnets         []string          `json:"subnets,omitempty"`
 
 	MixedInstancesPolicy *MixedInstancesPolicy `json:"mixedInstancesPolicy,omitempty"`
-
-	Status    ASGStatus
-	Instances []infrav1.Instance `json:"instances,omitempty"`
+	Status               ASGStatus
+	Instances            []infrav1.Instance `json:"instances,omitempty"`
 }
 
 // ASGStatus is a status string returned by the autoscaling API

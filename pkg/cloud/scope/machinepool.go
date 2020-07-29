@@ -24,9 +24,11 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/klogr"
+	"k8s.io/utils/pointer"
 	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
 	expinfrav1 "sigs.k8s.io/cluster-api-provider-aws/exp/api/v1alpha3"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
+	capierrors "sigs.k8s.io/cluster-api/errors"
 	expclusterv1 "sigs.k8s.io/cluster-api/exp/api/v1alpha3"
 	"sigs.k8s.io/cluster-api/util/patch"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -170,4 +172,19 @@ func (m *MachinePoolScope) SetAnnotation(key, value string) {
 		m.AWSMachinePool.Annotations = map[string]string{}
 	}
 	m.AWSMachinePool.Annotations[key] = value
+}
+
+// SetFailureMessage sets the AWSMachine status failure message.
+func (m *MachinePoolScope) SetFailureMessage(v error) {
+	m.AWSMachinePool.Status.FailureMessage = pointer.StringPtr(v.Error())
+}
+
+// SetFailureReason sets the AWSMachine status failure reason.
+func (m *MachinePoolScope) SetFailureReason(v capierrors.MachineStatusError) {
+	m.AWSMachinePool.Status.FailureReason = &v
+}
+
+// HasFailed returns true when the AWSMachinePool's Failure reason or Failure message is populated
+func (m *MachinePoolScope) HasFailed() bool {
+	return m.AWSMachinePool.Status.FailureReason != nil || m.AWSMachinePool.Status.FailureMessage != nil
 }
