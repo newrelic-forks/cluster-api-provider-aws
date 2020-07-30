@@ -98,6 +98,10 @@ func (s *Service) reconcileCluster(ctx context.Context) error {
 		return errors.Wrap(err, "failed reconciling cluster config")
 	}
 
+	if err := s.reconcileTags(cluster); err != nil {
+		return errors.Wrap(err, "failed updating cluster tags")
+	}
+
 	return nil
 }
 
@@ -231,6 +235,7 @@ func makeVpcConfig(subnets infrav1.Subnets, endpointAccess infrav1exp.EndpointAc
 }
 
 func makeEksLogging(loggingSpec *infrav1exp.ControlPlaneLoggingSpec) *eks.Logging {
+<<<<<<< HEAD
 =======
 	return &eks.VpcConfigRequest{
 		EndpointPublicAccess:  endpointAccess.Public,
@@ -242,6 +247,12 @@ func makeEksLogging(loggingSpec *infrav1exp.ControlPlaneLoggingSpec) *eks.Loggin
 
 func makeEksLogging(loggingSpec map[string]bool) *eks.Logging {
 >>>>>>> 51e94df6... Add public/private endpoint access support
+=======
+	if loggingSpec == nil {
+		return nil
+	}
+
+>>>>>>> a409aeb6... feat: added tags reconcilation and changed group name
 	var on = true
 	var off = false
 	enabled := eks.LogSetup{Enabled: &on}
@@ -409,7 +420,7 @@ func (s *Service) reconcileClusterConfig(cluster *eks.Cluster) error {
 			}
 			return true, nil
 		}); err != nil {
-			record.Warnf(s.scope.ControlPlane, "FailedUpdateEKSControlPlane", "failed to update the EKS control plane: %v", err)
+			record.Warnf(s.scope.ControlPlane, "FailedUpdateEKSControlPlane", "failed to update the EKS control plane %s: %v", cluster.Name, err)
 			return errors.Wrapf(err, "failed to update EKS cluster")
 		}
 	}
@@ -482,6 +493,7 @@ func (s *Service) reconcileClusterVersion(_ context.Context, cluster *eks.Cluste
 				}
 				return false, err
 			}
+			record.Eventf(s.scope.ControlPlane, "SuccessfulUpdateEKSControlPlane", "Updated EKS control plane %s to version %s", *cluster.Name, nextVersionString)
 			return true, nil
 		}); err != nil {
 			record.Warnf(s.scope.ControlPlane, "FailedUpdateEKSControlPlane", "failed to update the EKS control plane: %v", err)
@@ -497,7 +509,7 @@ func (s *Service) waitForClusterUpdate() (*eks.Cluster, error) {
 		return nil, err
 	}
 
-	record.Eventf(s.scope.ControlPlane, "SuccessfulUpdateEKSControlPlane", "Upgraded control plane to %s", *cluster.Version)
+	record.Eventf(s.scope.ControlPlane, "SuccessfulUpdateEKSControlPlane", "Updated EKS control plane %s", *cluster.Name)
 	return cluster, nil
 }
 

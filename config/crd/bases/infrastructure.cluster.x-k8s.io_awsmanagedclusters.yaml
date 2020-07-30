@@ -6,9 +6,9 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.2.9
   creationTimestamp: null
-  name: awsmanagedclusters.exp.infrastructure.cluster.x-k8s.io
+  name: awsmanagedclusters.infrastructure.cluster.x-k8s.io
 spec:
-  group: exp.infrastructure.cluster.x-k8s.io
+  group: infrastructure.cluster.x-k8s.io
   names:
     categories:
     - cluster-api
@@ -20,7 +20,25 @@ spec:
     singular: awsmanagedcluster
   scope: Namespaced
   versions:
-  - name: v1alpha3
+  - additionalPrinterColumns:
+    - description: Cluster to which this AWSManagedControl belongs
+      jsonPath: .metadata.labels.cluster\.x-k8s\.io/cluster-name
+      name: Cluster
+      type: string
+    - description: Control plane infrastructure is ready for worker nodes
+      jsonPath: .status.ready
+      name: Ready
+      type: string
+    - description: AWS VPC the control plane is using
+      jsonPath: .spec.networkSpec.vpc.id
+      name: VPC
+      type: string
+    - description: API Endpoint
+      jsonPath: .spec.controlPlaneEndpoint.host
+      name: Endpoint
+      priority: 1
+      type: string
+    name: v1alpha3
     schema:
       openAPIV3Schema:
         description: AWSManagedCluster is the Schema for the awsmanagedclusters API

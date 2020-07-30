@@ -64,17 +64,14 @@ func (s *Service) allocateAddress(role string) (string, error) {
 	}
 
 	if err := wait.WaitForWithRetryable(wait.NewBackoff(), func() (bool, error) {
-		if err := tags.Apply(&tags.ApplyParams{
-			EC2Client: s.EC2Client,
-			BuildParams: infrav1.BuildParams{
-				ClusterName: s.scope.Name(),
-				ResourceID:  *out.AllocationId,
-				Lifecycle:   infrav1.ResourceLifecycleOwned,
-				Name:        aws.String(fmt.Sprintf("%s-eip-%s", s.scope.Name(), role)),
-				Role:        aws.String(role),
-				Additional:  s.scope.AdditionalTags(),
-			},
-		}); err != nil {
+		if err := tags.Apply(&infrav1.BuildParams{
+			ClusterName: s.scope.Name(),
+			ResourceID:  *out.AllocationId,
+			Lifecycle:   infrav1.ResourceLifecycleOwned,
+			Name:        aws.String(fmt.Sprintf("%s-eip-%s", s.scope.Name(), role)),
+			Role:        aws.String(role),
+			Additional:  s.scope.AdditionalTags(),
+		}, s.applyTags); err != nil {
 			return false, err
 		}
 		return true, nil
