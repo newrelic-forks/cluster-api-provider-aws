@@ -237,57 +237,38 @@ func makeEksLogging(loggingSpec *infrav1exp.ControlPlaneLoggingSpec) *eks.Loggin
 	if loggingSpec == nil {
 		return nil
 	}
-
 	var on = true
 	var off = false
-	enabled := eks.LogSetup{Enabled: &on}
-	disabled := eks.LogSetup{Enabled: &off}
+	var enabledTypes []string
+	var disabledTypes []string
 
-	// API Server
-	logType := eks.LogTypeApi
-	if loggingSpec.APIServer {
-		enabled.Types = append(enabled.Types, &logType)
-	} else {
-		disabled.Types = append(disabled.Types, &logType)
+	appendToTypes := func(logType string, field bool) {
+		if field {
+			enabledTypes = append(enabledTypes, logType)
+		} else {
+			disabledTypes = append(disabledTypes, logType)
+		}
 	}
 
-	// Audit
-	logType = eks.LogTypeAudit
-	if loggingSpec.Audit {
-		enabled.Types = append(enabled.Types, &logType)
-	} else {
-		disabled.Types = append(disabled.Types, &logType)
-	}
-
-	// Authenticator
-	logType = eks.LogTypeAuthenticator
-	if loggingSpec.Authenticator {
-		enabled.Types = append(enabled.Types, &logType)
-	} else {
-		disabled.Types = append(disabled.Types, &logType)
-	}
-
-	// Controller Manager
-	logType = eks.LogTypeControllerManager
-	if loggingSpec.ControllerManager {
-		enabled.Types = append(enabled.Types, &logType)
-	} else {
-		disabled.Types = append(disabled.Types, &logType)
-	}
-
-	// Scheduler
-	logType = eks.LogTypeScheduler
-	if loggingSpec.Scheduler {
-		enabled.Types = append(enabled.Types, &logType)
-	} else {
-		disabled.Types = append(disabled.Types, &logType)
-	}
+	appendToTypes(eks.LogTypeApi, loggingSpec.APIServer)
+	appendToTypes(eks.LogTypeAudit, loggingSpec.Audit)
+	appendToTypes(eks.LogTypeAuthenticator, loggingSpec.Authenticator)
+	appendToTypes(eks.LogTypeControllerManager, loggingSpec.ControllerManager)
+	appendToTypes(eks.LogTypeScheduler, loggingSpec.Scheduler)
 
 	var clusterLogging []*eks.LogSetup
-	if len(enabled.Types) > 0 {
+	if len(enabledTypes) > 0 {
+		enabled := eks.LogSetup{
+			Enabled: &on,
+			Types:   aws.StringSlice(enabledTypes),
+		}
 		clusterLogging = append(clusterLogging, &enabled)
 	}
-	if len(disabled.Types) > 0 {
+	if len(disabledTypes) > 0 {
+		disabled := eks.LogSetup{
+			Enabled: &off,
+			Types:   aws.StringSlice(disabledTypes),
+		}
 		clusterLogging = append(clusterLogging, &disabled)
 	}
 	if len(clusterLogging) > 0 {
