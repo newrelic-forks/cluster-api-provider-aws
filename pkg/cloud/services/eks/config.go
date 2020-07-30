@@ -33,6 +33,7 @@ import (
 	"sigs.k8s.io/cluster-api/util/secret"
 
 	infrav1exp "sigs.k8s.io/cluster-api-provider-aws/exp/api/v1alpha3"
+	"sigs.k8s.io/cluster-api-provider-aws/pkg/record"
 )
 
 func (s *Service) reconcileKubeconfig(ctx context.Context, cluster *eks.Cluster) error {
@@ -57,6 +58,7 @@ func (s *Service) reconcileKubeconfig(ctx context.Context, cluster *eks.Cluster)
 		if createErr != nil {
 			return err
 		}
+
 	}
 
 	//TODO: does this need cert rotation? I don't think so
@@ -124,5 +126,6 @@ func (s *Service) createKubeconfigSecret(ctx context.Context, cluster *eks.Clust
 		return errors.Wrap(err, "failed to create kubeconfig secret")
 	}
 
+	record.Eventf(s.scope.ControlPlane, "SucessfulCreateKubeconfig", "Created kubeconfig for cluster %q", s.scope.Name())
 	return nil
 }
