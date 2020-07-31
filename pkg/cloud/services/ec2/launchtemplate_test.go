@@ -22,7 +22,6 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/ec2"
-	"github.com/aws/aws-sdk-go/service/ec2/ec2iface"
 	"github.com/golang/mock/gomock"
 	"github.com/pkg/errors"
 	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
@@ -151,68 +150,6 @@ func TestService_SDKToLaunchTemplate(t *testing.T) {
 			}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Fatalf("launchtemplate mismatch: got %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestService_createLaunchTemplateData(t *testing.T) {
-	mockCtrl := gomock.NewController(t)
-	defer mockCtrl.Finish()
-
-	type fields struct {
-		scope     Scope
-		EC2Client ec2iface.EC2API
-	}
-	type args struct {
-		scope    *scope.MachinePoolScope
-		userData []byte
-	}
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *ec2.RequestLaunchTemplateData
-		wantErr bool
-	}{
-		{
-			name:   "nil root volume",
-			fields: fields{
-				// EC2Client: ec2iface.EC2API,
-
-			},
-			args: args{
-				scope: &scope.MachinePoolScope{
-					AWSMachinePool: &expinfrav1.AWSMachinePool{
-						Spec: expinfrav1.AWSMachinePoolSpec{
-							AWSLaunchTemplate: expinfrav1.AWSLaunchTemplate{
-								RootVolume: nil,
-							},
-						},
-					},
-					AWSCluster: &infrav1.AWSCluster{
-						Spec: infrav1.AWSClusterSpec{
-							AdditionalTags: infrav1.Tags{"NotNilKey": "NotNilValue"},
-						},
-					},
-				},
-				userData: []byte("valid-user-data"),
-			},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			s := &Service{
-				scope:     tt.fields.scope,
-				EC2Client: tt.fields.EC2Client,
-			}
-			got, err := s.createLaunchTemplateData(tt.args.scope, tt.args.userData)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Service.createLaunchTemplateData() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Service.createLaunchTemplateData() = %v, want %v", got, tt.want)
 			}
 		})
 	}
