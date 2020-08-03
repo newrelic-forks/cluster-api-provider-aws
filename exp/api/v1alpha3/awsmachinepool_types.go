@@ -101,6 +101,8 @@ type AWSMachinePoolStatus struct {
 	// controller's output.
 	// +optional
 	FailureMessage *string `json:"failureMessage,omitempty"`
+
+	ASGStatus *ASGStatus `json:"asgStatus,omitempty"`
 }
 
 // +kubebuilder:object:root=true

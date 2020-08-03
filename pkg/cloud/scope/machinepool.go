@@ -188,3 +188,18 @@ func (m *MachinePoolScope) SetFailureReason(v capierrors.MachineStatusError) {
 func (m *MachinePoolScope) HasFailed() bool {
 	return m.AWSMachinePool.Status.FailureReason != nil || m.AWSMachinePool.Status.FailureMessage != nil
 }
+
+// SetNotReady sets the AWSMachinePool Ready Status to false
+func (m *MachinePoolScope) SetNotReady() {
+	m.AWSMachinePool.Status.Ready = false
+}
+
+// GetASGStatus returns the AWSMachinePool instance state from the status.
+func (m *MachinePoolScope) GetASGStatus() *expinfrav1.ASGStatus {
+	return m.AWSMachinePool.Status.ASGStatus
+}
+
+// SetASGStatus sets the AWSMachine status instance state.
+func (m *MachinePoolScope) SetASGStatus(v expinfrav1.ASGStatus) {
+	m.AWSMachinePool.Status.ASGStatus = &v
+}

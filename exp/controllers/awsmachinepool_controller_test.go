@@ -257,6 +257,22 @@ var _ = Describe("AWSMachinePoolReconciler", func() {
 			Expect(ms.AWSMachinePool.Finalizers).To(ConsistOf(metav1.FinalizerDeleteDependents))
 			Eventually(recorder.Events).Should(Receive(ContainSubstring("NoASGFound")))
 		})
+
+		It("should cause AWSMachinePool to go into NotReady", func() {
+			inProgressASG := expinfrav1.AutoScalingGroup{
+				Name:   "an-asg-that-is-currently-being-deleted",
+				Status: expinfrav1.ASGStatusDeleteInProgress,
+			}
+			asgSvc.EXPECT().GetASGByName(gomock.Any()).Return(&inProgressASG, nil)
+			ec2Svc.EXPECT().GetLaunchTemplate(gomock.Any()).Return(nil, nil).AnyTimes()
+
+			buf := new(bytes.Buffer)
+			klog.SetOutput(buf)
+			_, err := reconciler.reconcileDelete(ms, cs)
+			Expect(err).To(BeNil())
+			Expect(ms.AWSMachinePool.Status.Ready).To(Equal(false))
+			Eventually(recorder.Events).Should(Receive(ContainSubstring("DeletionInProgress")))
+		})
 	})
 })
 

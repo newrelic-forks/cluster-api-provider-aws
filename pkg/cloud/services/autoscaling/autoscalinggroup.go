@@ -77,16 +77,6 @@ func (s *Service) SDKToAutoScalingGroup(v *autoscaling.Group) (*expinfrav1.AutoS
 	return i, nil
 }
 
-//TODO: SDKToAutoScalingGroupInstance probably needs to be done as well
-// func (s *Service) SDKToAutoScalingGroupInstance(v *autoscaling.Instance) (*expinfrav1.AutoScalingGroup, error) {
-// 	i := &expinfrav1.AutoScalingGroupInstance
-// 		ID: aws.StringValue(v.AutoScalingGroupName),
-// 	}
-// 	// Will likely be similar to SDKToInstance
-
-// 	return i, nil
-// }
-
 // ASGIfExists returns the existing autoscaling group or nothing if it doesn't exist.
 func (s *Service) ASGIfExists(name *string) (*expinfrav1.AutoScalingGroup, error) {
 	if name == nil {
