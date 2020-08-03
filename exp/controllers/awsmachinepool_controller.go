@@ -284,7 +284,6 @@ func (r *AWSMachinePoolReconciler) reconcileDelete(machinePoolScope *scope.Machi
 	}
 
 	machinePoolScope.SetASGStatus(asg.Status)
-	fmt.Println(asg)
 	if asg == nil {
 		machinePoolScope.V(2).Info("Unable to locate ASG")
 		r.Recorder.Eventf(machinePoolScope.AWSMachinePool, corev1.EventTypeNormal, "NoASGFound", "Unable to find matching ASG")
@@ -294,7 +293,6 @@ func (r *AWSMachinePoolReconciler) reconcileDelete(machinePoolScope *scope.Machi
 			// ASG is already deleting
 			// machinePoolScope.AWSMachinePool.Status.Ready = false
 			machinePoolScope.SetNotReady()
-			fmt.Println(machinePoolScope.AWSMachinePool.Status.Ready)
 			conditions.MarkFalse(machinePoolScope.AWSMachinePool, expinfrav1.ASGReadyCondition, expinfrav1.ASGDeletionInProgress, clusterv1.ConditionSeverityWarning, "")
 			r.Recorder.Eventf(machinePoolScope.AWSMachinePool, corev1.EventTypeWarning, "DeletionInProgress", "ASG deletion in progress: %q", asg.Name)
 			machinePoolScope.Info("ASG is already deleting", "name", asg.Name)
@@ -307,7 +305,6 @@ func (r *AWSMachinePoolReconciler) reconcileDelete(machinePoolScope *scope.Machi
 		}
 	}
 
-	fmt.Println(machinePoolScope.AWSMachinePool.Status.Ready)
 	launchTemplate, err := ec2Svc.GetLaunchTemplate(machinePoolScope.AWSMachinePool.Status.LaunchTemplateID)
 	if err != nil {
 		return ctrl.Result{}, err
