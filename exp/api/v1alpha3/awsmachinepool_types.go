@@ -142,10 +142,10 @@ func (r *AWSMachinePool) SetConditions(conditions clusterv1.Conditions) {
 	r.Status.Conditions = conditions
 }
 
-func (obj *AWSMachinePool) GetObjectKind() schema.ObjectKind {
-	return &obj.TypeMeta
+func (r *AWSMachinePool) GetObjectKind() schema.ObjectKind {
+	return &r.TypeMeta
 }
 
-func (obj *AWSMachinePoolList) GetObjectKind() schema.ObjectKind {
-	return &obj.TypeMeta
+func (r *AWSMachinePoolList) GetObjectKind() schema.ObjectKind {
+	return &r.TypeMeta
 }

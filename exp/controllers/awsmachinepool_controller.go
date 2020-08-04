@@ -283,11 +283,11 @@ func (r *AWSMachinePoolReconciler) reconcileDelete(machinePoolScope *scope.Machi
 		return ctrl.Result{}, err
 	}
 
-	machinePoolScope.SetASGStatus(asg.Status)
 	if asg == nil {
 		machinePoolScope.V(2).Info("Unable to locate ASG")
 		r.Recorder.Eventf(machinePoolScope.AWSMachinePool, corev1.EventTypeNormal, "NoASGFound", "Unable to find matching ASG")
 	} else {
+		machinePoolScope.SetASGStatus(asg.Status)
 		switch asg.Status {
 		case expinfrav1.ASGStatusDeleteInProgress:
 			// ASG is already deleting

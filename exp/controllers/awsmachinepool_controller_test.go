@@ -277,31 +277,12 @@ var _ = Describe("AWSMachinePoolReconciler", func() {
 })
 
 //TODO: This was taken from awsmachine_controller_test, i think it should be moved to elsewhere in both locations like test/helpers
-func PointsTo(s string) gomock.Matcher {
-	return &pointsTo{
-		val: s,
-	}
-}
 
-type pointsTo struct {
-	val string
-}
-
-func (p *pointsTo) Matches(x interface{}) bool {
-	ptr, ok := x.(*string)
-	if !ok {
-		return false
-	}
-
-	if ptr == nil {
-		return false
-	}
-
-	return *ptr == p.val
-}
-
-func (p *pointsTo) String() string {
-	return fmt.Sprintf("Pointer to string %q", p.val)
+type conditionAssertion struct {
+	conditionType clusterv1.ConditionType
+	status        corev1.ConditionStatus
+	severity      clusterv1.ConditionSeverity
+	reason        string
 }
 
 func expectConditions(m *expinfrav1.AWSMachinePool, expected []conditionAssertion) {
@@ -314,11 +295,4 @@ func expectConditions(m *expinfrav1.AWSMachinePool, expected []conditionAssertio
 		Expect(actual.Severity).To(Equal(c.severity))
 		Expect(actual.Reason).To(Equal(c.reason))
 	}
-}
-
-type conditionAssertion struct {
-	conditionType clusterv1.ConditionType
-	status        corev1.ConditionStatus
-	severity      clusterv1.ConditionSeverity
-	reason        string
 }
