@@ -53,9 +53,9 @@ func (s *Service) reconcileCluster(ctx context.Context) error {
 		if err != nil {
 			return errors.Wrap(err, "failed to create cluster")
 		}
-		s.scope.Info("Created EKS control plane: %s", *cluster.Name)
+		s.scope.Info("Created EKS control plane", "cluster-name", *cluster.Name)
 	} else {
-		s.scope.V(2).Info("Found EKS control plane: %s", *cluster.Name)
+		s.scope.V(2).Info("Found EKS control plane", "cluster-name", *cluster.Name)
 	}
 
 	if err := s.setStatus(cluster); err != nil {
@@ -79,7 +79,7 @@ func (s *Service) reconcileCluster(ctx context.Context) error {
 		return nil
 	}
 
-	s.scope.V(2).Info("EKS Control Plane active endpoint: %s", *cluster.Endpoint)
+	s.scope.V(2).Info("EKS Control Plane active", "endpoint", *cluster.Endpoint)
 
 	s.scope.ControlPlane.Spec.ControlPlaneEndpoint = clusterv1.APIEndpoint{
 		Host: *cluster.Endpoint,
@@ -156,7 +156,7 @@ func (s *Service) deleteCluster() error {
 }
 
 func (s *Service) deleteClusterAndWait(cluster *eks.Cluster) error {
-	s.scope.Info("Deleting EKS cluster", "eks-cluster", cluster.Name)
+	s.scope.Info("Deleting EKS cluster", "cluster-name", cluster.Name)
 
 	input := &eks.DeleteClusterInput{
 		Name: cluster.Name,
