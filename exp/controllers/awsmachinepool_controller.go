@@ -291,7 +291,6 @@ func (r *AWSMachinePoolReconciler) reconcileDelete(machinePoolScope *scope.Machi
 		switch asg.Status {
 		case expinfrav1.ASGStatusDeleteInProgress:
 			// ASG is already deleting
-			// machinePoolScope.AWSMachinePool.Status.Ready = false
 			machinePoolScope.SetNotReady()
 			conditions.MarkFalse(machinePoolScope.AWSMachinePool, expinfrav1.ASGReadyCondition, expinfrav1.ASGDeletionInProgress, clusterv1.ConditionSeverityWarning, "")
 			r.Recorder.Eventf(machinePoolScope.AWSMachinePool, corev1.EventTypeWarning, "DeletionInProgress", "ASG deletion in progress: %q", asg.Name)
