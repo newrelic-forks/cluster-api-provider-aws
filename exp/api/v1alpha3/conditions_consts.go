@@ -25,6 +25,8 @@ const (
 	ASGNotFoundReason = "ASGNotFound"
 	// ASGProvisionFailedReason used for failures during autoscaling group provisioning.
 	ASGProvisionFailedReason = "ASGProvisionFailed"
+	// ASGDeletionInProgress ASG is in a deletion in progress state.
+	ASGDeletionInProgress = "ASGDeletionInProgress"
 
 	// LaunchTemplateReadyCondition represents the status of an AWSMachinePool's associated Launch Template
 	LaunchTemplateReadyCondition clusterv1.ConditionType = "LaunchTemplateReady"
