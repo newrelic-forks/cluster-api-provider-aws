@@ -263,6 +263,11 @@ func (in *AWSManagedControlPlaneStatus) DeepCopyInto(out *AWSManagedControlPlane
 		*out = new(cluster_api_provider_awsapiv1alpha3.Instance)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.SecurityGroup != nil {
+		in, out := &in.SecurityGroup, &out.SecurityGroup
+		*out = new(cluster_api_provider_awsapiv1alpha3.SecurityGroup)
+		(*in).DeepCopyInto(*out)
+	}
 	if in.FailureMessage != nil {
 		in, out := &in.FailureMessage, &out.FailureMessage
 		*out = new(string)

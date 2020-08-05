@@ -87,7 +87,7 @@ func TestTags_ComputeDiff(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			out := computeDiff(tc.input, &bp)
+			out := computeDiff(tc.input, bp)
 			if e, a := tc.expected, out; !reflect.DeepEqual(e, a) {
 				t.Errorf("expected %#v, got %#v", e, a)
 			}

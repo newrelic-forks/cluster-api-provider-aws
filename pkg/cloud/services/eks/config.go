@@ -18,6 +18,7 @@ package eks
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 
 	"github.com/aws/aws-sdk-go/service/eks"
@@ -58,10 +59,12 @@ func (s *Service) reconcileKubeconfig(ctx context.Context, cluster *eks.Cluster)
 		if createErr != nil {
 			return err
 		}
-
 	}
 
 	//TODO: does this need cert rotation? I don't think so
+
+	// Set initialized to true to indicate the kubconfig has been created
+	s.scope.ControlPlane.Status.Initialized = true
 
 	return nil
 }
@@ -73,12 +76,17 @@ func (s *Service) createKubeconfigSecret(ctx context.Context, cluster *eks.Clust
 	userName := fmt.Sprintf("%s-admin", clusterName)
 	contextName := fmt.Sprintf("%s@%s", userName, clusterName)
 
+	certData, err := base64.StdEncoding.DecodeString(*cluster.CertificateAuthority.Data)
+	if err != nil {
+		return fmt.Errorf("decoding cluster CA cert: %w", err)
+	}
+
 	cfg := &api.Config{
 		APIVersion: api.SchemeGroupVersion.Version,
 		Clusters: map[string]*api.Cluster{
 			clusterName: {
 				Server:                   *cluster.Endpoint,
-				CertificateAuthorityData: []byte(*cluster.CertificateAuthority.Data),
+				CertificateAuthorityData: certData,
 			},
 		},
 		Contexts: map[string]*api.Context{
