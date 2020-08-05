@@ -86,6 +86,10 @@ func (s *Service) reconcileCluster(ctx context.Context) error {
 		Port: 443,
 	}
 
+	if err := s.reconcileSecurityGroup(cluster); err != nil {
+		return errors.Wrap(err, "failed reconciling security group")
+	}
+
 	if err := s.reconcileKubeconfig(ctx, cluster); err != nil {
 		return errors.Wrap(err, "failed reconciling kubeconfig")
 	}

@@ -128,6 +128,14 @@ type AWSManagedControlPlaneStatus struct {
 	// Bastion holds details of the instance that is used as a bastion jump box
 	// +optional
 	Bastion *infrav1.Instance `json:"bastion,omitempty"`
+	// SecurityGroup holds details of the security group created automatically when
+	// creating an EKS cluster in AWS.
+	// +optional
+	SecurityGroup *infrav1.SecurityGroup `json:"securityGroup,omitempty"`
+	// Initialized denotes whether or not the control plane has the
+	// uploaded kubernetes config-map.
+	// +optional
+	Initialized bool `json:"initialized"`
 	// Ready denotes that the AWSManagedControlPlane API Server is ready to
 	// receive requests and that the VPC infra is ready.
 	// +kubebuilder:default=false
