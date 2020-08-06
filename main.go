@@ -24,6 +24,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/spf13/pflag"
+
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	cgrecord "k8s.io/client-go/tools/record"
@@ -42,12 +44,25 @@ import (
 	expcontrollers "sigs.k8s.io/cluster-api-provider-aws/exp/controllers"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/record"
 	"sigs.k8s.io/cluster-api-provider-aws/version"
+	"sigs.k8s.io/cluster-api/feature"
 	// +kubebuilder:scaffold:imports
 )
 
 var (
 	scheme   = runtime.NewScheme()
 	setupLog = ctrl.Log.WithName("setup")
+
+	// flags
+	metricsAddr             string
+	enableLeaderElection    bool
+	leaderElectionNamespace string
+	watchNamespace          string
+	profilerAddress         string
+	awsClusterConcurrency   int
+	awsMachineConcurrency   int
+	syncPeriod              time.Duration
+	webhookPort             int
+	healthAddr              string
 )
 
 func init() {
@@ -60,90 +75,59 @@ func init() {
 	// +kubebuilder:scaffold:scheme
 }
 
-func main() {
-	rand.Seed(time.Now().UnixNano())
-
-	klog.InitFlags(nil)
-
-	var (
-		metricsAddr             string
-		enableLeaderElection    bool
-		leaderElectionNamespace string
-		watchNamespace          string
-		profilerAddress         string
-		awsClusterConcurrency   int
-		awsMachineConcurrency   int
-		syncPeriod              time.Duration
-		webhookPort             int
-		healthAddr              string
-	)
-
-	flag.StringVar(
-		&metricsAddr,
-		"metrics-addr",
-		":8080",
+// InitFlags initializes the flags.
+func InitFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&metricsAddr, "metrics-addr", ":8080",
 		"The address the metric endpoint binds to.",
 	)
 
-	flag.BoolVar(
-		&enableLeaderElection,
-		"enable-leader-election",
-		false,
+	fs.BoolVar(&enableLeaderElection, "enable-leader-election", false,
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.",
 	)
 
-	flag.StringVar(
-		&watchNamespace,
-		"namespace",
-		"",
+	fs.StringVar(&watchNamespace, "namespace", "",
 		"Namespace that the controller watches to reconcile cluster-api objects. If unspecified, the controller watches for cluster-api objects across all namespaces.",
 	)
 
-	flag.StringVar(
-		&leaderElectionNamespace,
-		"leader-election-namespace",
-		"",
+	fs.StringVar(&leaderElectionNamespace, "leader-election-namespace", "",
 		"Namespace that the controller performs leader election in. If unspecified, the controller will discover which namespace it is running in.",
 	)
 
-	flag.StringVar(
-		&profilerAddress,
-		"profiler-address",
-		"",
+	fs.StringVar(&profilerAddress, "profiler-address", "",
 		"Bind address to expose the pprof profiler (e.g. localhost:6060)",
 	)
 
-	flag.IntVar(&awsClusterConcurrency,
-		"awscluster-concurrency",
-		5,
+	fs.IntVar(&awsClusterConcurrency, "awscluster-concurrency", 5,
 		"Number of AWSClusters to process simultaneously",
 	)
 
-	flag.IntVar(&awsMachineConcurrency,
-		"awsmachine-concurrency",
-		10,
+	fs.IntVar(&awsMachineConcurrency, "awsmachine-concurrency", 10,
 		"Number of AWSMachines to process simultaneously",
 	)
 
-	flag.DurationVar(&syncPeriod,
-		"sync-period",
-		10*time.Minute,
+	fs.DurationVar(&syncPeriod, "sync-period", 10*time.Minute,
 		"The minimum interval at which watched resources are reconciled (e.g. 15m)",
 	)
 
-	flag.IntVar(&webhookPort,
-		"webhook-port",
-		0,
+	fs.IntVar(&webhookPort, "webhook-port", 0,
 		"Webhook Server port, disabled by default. When enabled, the manager will only work as webhook server, no reconcilers are installed.",
 	)
 
-	flag.StringVar(&healthAddr,
-		"health-addr",
-		":9440",
+	fs.StringVar(&healthAddr, "health-addr", ":9440",
 		"The address the health endpoint binds to.",
 	)
 
-	flag.Parse()
+	feature.MutableGates.AddFlag(fs)
+}
+
+func main() {
+	rand.Seed(time.Now().UnixNano())
+
+	InitFlags(pflag.CommandLine)
+
+	klog.InitFlags(nil)
+	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
+	pflag.Parse()
 
 	ctrl.SetLogger(klogr.New())
 
@@ -201,13 +185,15 @@ func main() {
 			setupLog.Error(err, "unable to create controller", "controller", "AWSCluster")
 			os.Exit(1)
 		}
-		if err = (&expcontrollers.AWSMachinePoolReconciler{
-			Client:   mgr.GetClient(),
-			Log:      ctrl.Log.WithName("controllers").WithName("AWSMachinePool"),
-			Recorder: mgr.GetEventRecorderFor("awsmachinepool-controller"),
-		}).SetupWithManager(mgr); err != nil {
-			setupLog.Error(err, "unable to create controller", "controller", "AWSMachinePool")
-			os.Exit(1)
+		if feature.Gates.Enabled(feature.MachinePool) {
+			if err = (&expcontrollers.AWSMachinePoolReconciler{
+				Client:   mgr.GetClient(),
+				Log:      ctrl.Log.WithName("controllers").WithName("AWSMachinePool"),
+				Recorder: mgr.GetEventRecorderFor("awsmachinepool-controller"),
+			}).SetupWithManager(mgr); err != nil {
+				setupLog.Error(err, "unable to create controller", "controller", "AWSMachinePool")
+				os.Exit(1)
+			}
 		}
 	} else {
 		if err = (&infrav1alpha3.AWSMachineTemplate{}).SetupWebhookWithManager(mgr); err != nil {
