@@ -226,6 +226,28 @@ var _ = Describe("AWSMachinePoolReconciler", func() {
 				asgSvc.EXPECT().GetASGByName(gomock.Any()).Return(nil, nil).AnyTimes()
 			})
 		})
+
+		When("The ASG needs to be updated", func() {
+			BeforeEach(func() {
+				ms.AWSMachinePool.Spec.Subnets = []string{"subnet-foo", "subnet-bar", "subnet-zed"}
+				fakeASG := &expinfrav1.AutoScalingGroup{
+					Subnets: []string{"subnet-foo", "subnet-bar"},
+				}
+				fakeLaunchTemplate := &expinfrav1.AWSLaunchTemplate{}
+				// Return a fake ASG so we go into update flow
+				asgSvc.EXPECT().GetASGByName(gomock.Any()).Return(fakeASG, nil).AnyTimes()
+				ec2Svc.EXPECT().GetLaunchTemplate(gomock.Any()).Return(fakeLaunchTemplate, nil).AnyTimes()
+				ec2Svc.EXPECT().LaunchTemplateNeedsUpdate(gomock.Any(), gomock.Any()).Return(false, nil).AnyTimes()
+			})
+
+			It("should update the ASG subnets according to the AWSMachinePool Subnets", func() {
+				asgSvc.EXPECT().UpdateASG(gomock.Eq(ms)).Return(nil)
+
+				_, err := reconciler.reconcileNormal(context.Background(), ms, cs)
+				Expect(err).To(BeNil())
+			})
+		})
+
 	})
 
 	Context("deleting an AWSMachinePool", func() {

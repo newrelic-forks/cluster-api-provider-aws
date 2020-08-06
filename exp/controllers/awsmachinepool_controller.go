@@ -462,7 +462,17 @@ func asgNeedsUpdates(machinePoolScope *scope.MachinePoolScope, existingASG *expi
 		return true
 	}
 
-	// todo subnet diff
+	if len(machinePoolScope.AWSMachinePool.Spec.Subnets) == len(existingASG.Subnets) {
+		// check list of subnets
+		for _, subnet := range machinePoolScope.AWSMachinePool.Spec.Subnets {
+			found := stringInSlice(subnet, existingASG.Subnets)
+			if !found {
+				return true
+			}
+		}
+	} else {
+		return true
+	}
 
 	return false
 }
@@ -517,4 +527,13 @@ func machinePoolToInfrastructureMapFunc(gvk schema.GroupVersionKind) handler.ToR
 			},
 		}
 	}
+}
+
+func stringInSlice(a string, list []string) bool {
+	for _, b := range list {
+		if b == a {
+			return true
+		}
+	}
+	return false
 }
