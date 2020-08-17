@@ -172,6 +172,7 @@ test-conformance-fast: ## Run clusterctl based conformance test on workload clus
 ## --------------------------------------
 .PHONY: binaries
 <<<<<<< HEAD
+<<<<<<< HEAD
 binaries: manager clusterawsadm  ## Builds and installs all binaries
 =======
 binaries: managers clusterawsadm ## Builds and installs all binaries
@@ -184,6 +185,12 @@ managers:
 
 .PHONY: manager-core
 manager-core: ## Build manager binary.
+=======
+binaries: manager clusterawsadm  ## Builds and installs all binaries
+
+.PHONY: manager
+manager: ## Build manager binary.
+>>>>>>> richardcase/ekscontrolplane
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "${LDFLAGS} -extldflags '-static'" -o $(BIN_DIR)/manager .
 
 .PHONY: manager-eks-bootstrap
@@ -327,7 +334,8 @@ generate-manifests:
 	$(MAKE) generate-eks-bootstrap-manifests
 
 .PHONY: generate-core-manifests
-generate-core-manifests: $(CONTROLLER_GEN) ## Generate manifests e.g. CRD, RBAC etc.
+generate-manifests: $(CONTROLLER_GEN) ## Generate manifests for the core provider e.g. CRD, RBAC etc.
+
 	$(CONTROLLER_GEN) \
 		paths=./api/... \
 		paths=./$(EXP_DIR)/api/... \
