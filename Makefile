@@ -171,26 +171,19 @@ test-conformance-fast: ## Run clusterctl based conformance test on workload clus
 ## Binaries
 ## --------------------------------------
 .PHONY: binaries
-<<<<<<< HEAD
-<<<<<<< HEAD
 binaries: manager clusterawsadm  ## Builds and installs all binaries
-=======
-binaries: managers clusterawsadm ## Builds and installs all binaries
 
 .PHONY: managers
 managers:
 	$(MAKE) manager-core
 	$(MAKE) manager-eks-bootstrap
->>>>>>> 07818bda... chore: update Makefile and Dockerfile for eks bootstrapper (#14)
 
 .PHONY: manager-core
 manager-core: ## Build manager binary.
-=======
 binaries: manager clusterawsadm  ## Builds and installs all binaries
 
 .PHONY: manager
 manager: ## Build manager binary.
->>>>>>> richardcase/ekscontrolplane
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "${LDFLAGS} -extldflags '-static'" -o $(BIN_DIR)/manager .
 
 .PHONY: manager-eks-bootstrap
