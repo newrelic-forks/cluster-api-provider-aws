@@ -98,7 +98,7 @@ func (s *Service) ReconcileBastion() error {
 	return nil
 }
 
-// DeleteBastion deletes the Bastion instance
+// DeleteBastion deletes the Bastion instance and related security groups
 func (s *Service) DeleteBastion() error {
 	instance, err := s.describeBastionInstance()
 	if err != nil {
@@ -114,6 +114,10 @@ func (s *Service) DeleteBastion() error {
 		return err
 	}
 
+	if err := s.deleteBastionSecurityGroup(); err != nil {
+		return errors.Wrap(err, "unable to delete bastion security group")
+	}
+
 	if err := s.TerminateInstanceAndWait(instance.ID); err != nil {
 		conditions.MarkFalse(s.scope.InfraCluster(), infrav1.BastionHostReadyCondition, "DeletingFailed", clusterv1.ConditionSeverityWarning, err.Error())
 		record.Warnf(s.scope.InfraCluster(), "FailedTerminateBastion", "Failed to terminate bastion instance %q: %v", instance.ID, err)
@@ -122,6 +126,20 @@ func (s *Service) DeleteBastion() error {
 	conditions.MarkFalse(s.scope.InfraCluster(), infrav1.BastionHostReadyCondition, clusterv1.DeletedReason, clusterv1.ConditionSeverityInfo, "")
 	record.Eventf(s.scope.InfraCluster(), "SuccessfulTerminateBastion", "Terminated bastion instance %q", instance.ID)
 
+	return nil
+}
+
+// DeleteLaunchTemplate delete a launch template
+func (s *Service) deleteBastionSecurityGroup() error {
+	bastionSecurityGroup := s.scope.Network().SecurityGroups[infrav1.SecurityGroupBastion].ID
+	input := &ec2.DeleteSecurityGroupInput{
+		GroupId: aws.String(bastionSecurityGroup),
+	}
+	if _, err := s.EC2Client.DeleteSecurityGroup(input); err != nil {
+		return errors.Wrapf(err, "failed to delete bastion security group %q", bastionSecurityGroup)
+	}
+
+	s.scope.V(2).Info("Deleted bastion security group", "security group", bastionSecurityGroup)
 	return nil
 }
 
