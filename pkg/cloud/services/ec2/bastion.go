@@ -129,17 +129,17 @@ func (s *Service) DeleteBastion() error {
 	return nil
 }
 
-// DeleteLaunchTemplate delete a launch template
+// deleteBastionSecurityGroup deletes the default bastion security group
 func (s *Service) deleteBastionSecurityGroup() error {
 	bastionSecurityGroup := s.scope.Network().SecurityGroups[infrav1.SecurityGroupBastion].ID
 	input := &ec2.DeleteSecurityGroupInput{
 		GroupId: aws.String(bastionSecurityGroup),
 	}
 	if _, err := s.EC2Client.DeleteSecurityGroup(input); err != nil {
-		return errors.Wrapf(err, "failed to delete bastion security group %q", bastionSecurityGroup)
+		return errors.Wrapf(err, "failed to delete default bastion security group %q", bastionSecurityGroup)
 	}
 
-	s.scope.V(2).Info("Deleted bastion security group", "security group", bastionSecurityGroup)
+	s.scope.V(2).Info("Deleted default bastion security group", "security group", bastionSecurityGroup)
 	return nil
 }
 
