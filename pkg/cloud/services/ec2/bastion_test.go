@@ -105,13 +105,6 @@ func TestDeleteBastion(t *testing.T) {
 						}),
 					).
 					Return(nil, errors.New("some error"))
-				m.
-					DeleteSecurityGroup(
-						gomock.Eq(&ec2.DeleteSecurityGroupInput{
-							GroupId: aws.String(""),
-						}),
-					).
-					Return(&ec2.DeleteSecurityGroupOutput{}, nil)
 			},
 			expectError: true,
 		},
@@ -135,13 +128,6 @@ func TestDeleteBastion(t *testing.T) {
 						}),
 					).
 					Return(errors.New("some error"))
-				m.
-					DeleteSecurityGroup(
-						gomock.Eq(&ec2.DeleteSecurityGroupInput{
-							GroupId: aws.String(""),
-						}),
-					).
-					Return(&ec2.DeleteSecurityGroupOutput{}, nil)
 			},
 			expectError: true,
 		},
@@ -165,13 +151,6 @@ func TestDeleteBastion(t *testing.T) {
 						}),
 					).
 					Return(nil)
-				m.
-					DeleteSecurityGroup(
-						gomock.Eq(&ec2.DeleteSecurityGroupInput{
-							GroupId: aws.String(""),
-						}),
-					).
-					Return(&ec2.DeleteSecurityGroupOutput{}, nil)
 			},
 			expectError: false,
 		},
