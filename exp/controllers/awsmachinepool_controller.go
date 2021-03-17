@@ -273,6 +273,11 @@ func (r *AWSMachinePoolReconciler) reconcileNormal(_ context.Context, machinePoo
 		return ctrl.Result{}, errors.Wrap(err, "error updating tags")
 	}
 
+	err = r.suspendAZRebalance(machinePoolScope, clusterScope)
+	if err != nil {
+		return ctrl.Result{}, errors.Wrap(err, "error suspending AZRebalance")
+	}
+
 	// Make sure Spec.ProviderID is always set.
 	machinePoolScope.AWSMachinePool.Spec.ProviderID = asg.ID
 	providerIDList := make([]string, len(asg.Instances))
@@ -460,6 +465,19 @@ func (r *AWSMachinePoolReconciler) reconcileTags(machinePoolScope *scope.Machine
 	if tagsChanged {
 		r.Recorder.Eventf(machinePoolScope.AWSMachinePool, corev1.EventTypeNormal, "UpdatedTags", "updated tags on resources")
 	}
+	return nil
+}
+
+func (r *AWSMachinePoolReconciler) suspendAZRebalance(machinePoolScope *scope.MachinePoolScope, clusterScope cloud.ClusterScoper) error {
+	asgSvc := r.getASGService(clusterScope)
+
+	asgName := machinePoolScope.Name()
+
+	err := asgSvc.SuspendAZRebalance(asgName)
+	if err != nil {
+		return err
+	}
+	r.Recorder.Eventf(machinePoolScope.AWSMachinePool, corev1.EventTypeNormal, "SuspendedAZRebalance", "suspended AZRebalance on ASG")
 	return nil
 }
 

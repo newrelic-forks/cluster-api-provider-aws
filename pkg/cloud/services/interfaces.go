@@ -35,6 +35,7 @@ type ASGInterface interface {
 	ASGIfExists(id *string) (*expinfrav1.AutoScalingGroup, error)
 	GetASGByName(scope *scope.MachinePoolScope) (*expinfrav1.AutoScalingGroup, error)
 	CreateASG(scope *scope.MachinePoolScope) (*expinfrav1.AutoScalingGroup, error)
+	SuspendAZRebalance(asgName string) error
 	UpdateASG(scope *scope.MachinePoolScope) error
 	UpdateResourceTags(resourceID *string, create, remove map[string]string) error
 	DeleteASGAndWait(id string) error

@@ -109,6 +109,20 @@ func (mr *MockASGInterfaceMockRecorder) GetASGByName(arg0 interface{}) *gomock.C
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetASGByName", reflect.TypeOf((*MockASGInterface)(nil).GetASGByName), arg0)
 }
 
+// SuspendAZRebalance mocks base method
+func (m *MockASGInterface) SuspendAZRebalance(arg0 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SuspendAZRebalance", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SuspendAZRebalance indicates an expected call of SuspendAZRebalance
+func (mr *MockASGInterfaceMockRecorder) SuspendAZRebalance(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SuspendAZRebalance", reflect.TypeOf((*MockASGInterface)(nil).SuspendAZRebalance), arg0)
+}
+
 // UpdateASG mocks base method
 func (m *MockASGInterface) UpdateASG(arg0 *scope.MachinePoolScope) error {
 	m.ctrl.T.Helper()

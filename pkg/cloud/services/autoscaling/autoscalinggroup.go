@@ -193,6 +193,10 @@ func (s *Service) CreateASG(scope *scope.MachinePoolScope) (*expinfrav1.AutoScal
 	}
 	record.Eventf(scope.AWSMachinePool, "SuccessfulCreate", "Created new ASG: %s", scope.Name)
 
+	if err := s.SuspendAZRebalance(input.Name); err != nil {
+		s.scope.Error(err, "failed to suspend AZRebalance")
+	}
+
 	return nil, nil
 }
 
@@ -228,6 +232,25 @@ func (s *Service) runPool(i *expinfrav1.AutoScalingGroup, launchTemplateID strin
 		return errors.Wrap(err, "failed to create autoscaling group")
 	}
 
+	return nil
+}
+
+// SuspendAZRebalance disables the AZRebalance feature that is automatically
+// enabled on all multi-AZ autoscaling groups in AWS. In the absence of
+// lifecycle hooks on the ASG this will result in instances being terminated
+// without draining.
+func (s *Service) SuspendAZRebalance(asgName string) error {
+	AZRebalanceProcess := "AZRebalance"
+	input := &autoscaling.ScalingProcessQuery{
+		AutoScalingGroupName: &asgName,
+		ScalingProcesses: []*string{
+			&AZRebalanceProcess,
+		},
+	}
+	_, err := s.ASGClient.SuspendProcesses(input)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -294,6 +317,10 @@ func (s *Service) UpdateASG(scope *scope.MachinePoolScope) error {
 
 	if _, err := s.ASGClient.UpdateAutoScalingGroup(input); err != nil {
 		return errors.Wrapf(err, "failed to update ASG %q", scope.Name())
+	}
+
+	if err := s.SuspendAZRebalance(*input.AutoScalingGroupName); err != nil {
+		s.scope.Error(err, "failed to suspend AZRebalance")
 	}
 
 	return nil
