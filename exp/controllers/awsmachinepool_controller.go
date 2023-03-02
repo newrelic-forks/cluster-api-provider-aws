@@ -277,7 +277,10 @@ func (r *AWSMachinePoolReconciler) reconcileNormal(ctx context.Context, machineP
 	machinePoolScope.AWSMachinePool.Spec.ProviderID = asg.ID
 	providerIDList := make([]string, len(asg.Instances))
 
+	fmt.Printf("Found ASG: %+v\n", *asg)
+
 	for i, ec2 := range asg.Instances {
+		fmt.Printf("ASG instances: %+v", ec2)
 		providerIDList[i] = fmt.Sprintf("aws:///%s/%s", ec2.AvailabilityZone, ec2.ID)
 	}
 
