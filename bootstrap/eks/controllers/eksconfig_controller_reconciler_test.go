@@ -33,7 +33,8 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/exp/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util"
-	"sigs.k8s.io/cluster-api/util/conditions"
+	v1beta1conditions "sigs.k8s.io/cluster-api/util/deprecated/v1beta1/conditions"
+	kubeconfigutil "sigs.k8s.io/cluster-api/util/kubeconfig"
 )
 
 func TestEKSConfigReconciler(t *testing.T) {
@@ -284,6 +285,7 @@ func newCluster(name string) *clusterv1.Cluster {
 			Name:      name,
 		},
 		Spec: clusterv1.ClusterSpec{
+<<<<<<< HEAD
 			ControlPlaneRef: &corev1.ObjectReference{
 				Name:      name,
 				Kind:      "AWSManagedControlPlane",
@@ -295,6 +297,21 @@ func newCluster(name string) *clusterv1.Cluster {
 		},
 	}
 	conditions.MarkTrue(cluster, clusterv1.ControlPlaneInitializedCondition)
+=======
+			ControlPlaneRef: clusterv1.ContractVersionedObjectReference{
+				Name:     name,
+				Kind:     "AWSManagedControlPlane",
+				APIGroup: ekscontrolplanev1.GroupVersion.Group,
+			},
+		},
+		Status: clusterv1.ClusterStatus{
+			Initialization: clusterv1.ClusterInitializationStatus{
+				InfrastructureProvisioned: ptr.To(true),
+				ControlPlaneInitialized:   ptr.To(true),
+			},
+		},
+	}
+>>>>>>> a681199f1 (Merge pull request #5700 from nutanix-cloud-native/faiq/nodeadm-upstream)
 	return cluster
 }
 
@@ -413,7 +430,7 @@ func newUserData(clusterName string, kubeletExtraArgs map[string]string) ([]byte
 // newAMCP returns an EKS AWSManagedControlPlane object.
 func newAMCP(name string) *ekscontrolplanev1.AWSManagedControlPlane {
 	generatedName := fmt.Sprintf("%s-%s", name, util.RandomString(5))
-	return &ekscontrolplanev1.AWSManagedControlPlane{
+	amcp := &ekscontrolplanev1.AWSManagedControlPlane{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "AWSManagedControlPlane",
 			APIVersion: ekscontrolplanev1.GroupVersion.String(),
@@ -426,4 +443,40 @@ func newAMCP(name string) *ekscontrolplanev1.AWSManagedControlPlane {
 			EKSClusterName: generatedName,
 		},
 	}
+	v1beta1conditions.MarkTrue(amcp, ekscontrolplanev1.EKSControlPlaneReadyCondition)
+	return amcp
+}
+
+const dummyKubeconfigTemplate = `
+apiVersion: v1
+clusters:
+- cluster:
+    certificate-authority-data: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCkV5QXV0aG9yIElzc3VlciBJc3N1ZXI6IGV4YW1wbGUuY29tIC0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K
+    server: %s
+  name: %s
+contexts:
+- context:
+    cluster: %s
+    user: my-user
+  name: my-context
+current-context: my-context
+kind: Config
+users:
+- name: my-user
+  user:
+    token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c
+`
+
+func newKubeconfigSecret(apiEndpoint string, cluster *clusterv1.Cluster) *corev1.Secret {
+	data := fmt.Sprintf(dummyKubeconfigTemplate, apiEndpoint, cluster.Name, cluster.Name)
+	return kubeconfigutil.GenerateSecretWithOwner(
+		client.ObjectKeyFromObject(cluster),
+		[]byte(data),
+		metav1.OwnerReference{
+			Kind:       "Cluster",
+			APIVersion: clusterv1.GroupVersion.String(),
+			Name:       cluster.Name,
+			UID:        cluster.UID,
+		},
+	)
 }
