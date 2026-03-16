@@ -23,11 +23,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"k8s.io/klog/v2"
+	ctrl "sigs.k8s.io/controller-runtime"
 
 	"sigs.k8s.io/cluster-api-provider-aws/v2/test/e2e/shared"
-	"sigs.k8s.io/cluster-api/test/framework"
 )
 
 var (
@@ -42,8 +43,9 @@ func init() {
 }
 
 func TestE2E(t *testing.T) {
+	ctrl.SetLogger(klog.Background())
 	RegisterFailHandler(ginkgo.Fail)
-	ginkgo.RunSpecsWithDefaultAndCustomReporters(t, "capa-e2e", []ginkgo.Reporter{framework.CreateJUnitReporterForProw(e2eCtx.Settings.ArtifactFolder)})
+	ginkgo.RunSpecs(t, "capa-e2e")
 }
 
 var _ = ginkgo.SynchronizedBeforeSuite(func() []byte {

@@ -20,10 +20,10 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+	"k8s.io/kubectl/pkg/util/templates"
 
 	"sigs.k8s.io/cluster-api-provider-aws/v2/cmd/clusterawsadm/cloudformation/bootstrap"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/cmd/clusterawsadm/converters"
-	"sigs.k8s.io/cluster-api/cmd/clusterctl/cmd"
 )
 
 var errInvalidDocumentName = fmt.Errorf("invalid document name, use one of: %+v", bootstrap.ManagedIAMPolicyNames)
@@ -32,16 +32,19 @@ func printPolicyCmd() *cobra.Command {
 	newCmd := &cobra.Command{
 		Use:   "print-policy",
 		Short: "Generate and show an IAM policy",
-		Long: cmd.LongDesc(`
+		Long: templates.LongDesc(`
 			Generate and show an AWS Identity and Access Management (IAM) policy for
 			Kubernetes Cluster API Provider AWS.
 		`),
-		Example: cmd.Examples(`
+		Example: templates.Examples(`
+		# Print out all the IAM policies for the Kubernetes CLuster API Provider AWS.
+		clusterawsadm bootstrap iam print-policy
+
 		# Print out the IAM policy for the Kubernetes Cluster API Provider AWS Controller.
 		clusterawsadm bootstrap iam print-policy --document AWSIAMManagedPolicyControllers
 
 		# Print out the IAM policy for the Kubernetes Cluster API Provider AWS Controller using a given configuration file.
-		clusterawsadm bootstrap iam print-policy --document AWSIAMManagedPolicyControllers --config bootstrap_config.yaml		
+		clusterawsadm bootstrap iam print-policy --document AWSIAMManagedPolicyControllers --config bootstrap_config.yaml
 
 		# Print out the IAM policy for the Kubernetes AWS Cloud Provider for the control plane.
 		clusterawsadm bootstrap iam print-policy --document AWSIAMManagedPolicyCloudProviderControlPlane
@@ -64,6 +67,10 @@ func printPolicyCmd() *cobra.Command {
 				return err
 			}
 
+			if policyName == "" {
+				return template.PrintPolicyDocs()
+			}
+
 			policyDocument := template.GetPolicyDocFromPolicyName(policyName)
 			str, err := converters.IAMPolicyDocumentToJSON(*policyDocument)
 			if err != nil {
@@ -81,6 +88,11 @@ func printPolicyCmd() *cobra.Command {
 
 func getDocumentName(cmd *cobra.Command) (bootstrap.PolicyName, error) {
 	val := bootstrap.PolicyName(cmd.Flags().Lookup("document").Value.String())
+
+	if val == "" {
+		return "", nil
+	}
+
 	if !val.IsValid() {
 		return "", errInvalidDocumentName
 	}

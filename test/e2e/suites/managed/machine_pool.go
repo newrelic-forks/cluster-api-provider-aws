@@ -25,11 +25,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/aws/aws-sdk-go/aws/client"
-	"github.com/onsi/ginkgo"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cluster-api-provider-aws/v2/test/e2e/shared"
 	"sigs.k8s.io/cluster-api/test/framework"
@@ -41,7 +41,7 @@ type MachinePoolSpecInput struct {
 	E2EConfig             *clusterctl.E2EConfig
 	ConfigClusterFn       DefaultConfigClusterFn
 	BootstrapClusterProxy framework.ClusterProxy
-	AWSSession            client.ConfigProvider
+	AWSSession            *aws.Config
 	Namespace             *corev1.Namespace
 	ClusterName           string
 	IncludeScaling        bool
@@ -59,10 +59,10 @@ func MachinePoolSpec(ctx context.Context, inputGetter func() MachinePoolSpecInpu
 	Expect(input.BootstrapClusterProxy).ToNot(BeNil(), "Invalid argument. input.BootstrapClusterProxy can't be nil")
 	Expect(input.AWSSession).ToNot(BeNil(), "Invalid argument. input.AWSSession can't be nil")
 	Expect(input.Namespace).NotTo(BeNil(), "Invalid argument. input.Namespace can't be nil")
-	Expect(input.ClusterName).ShouldNot(HaveLen(0), "Invalid argument. input.ClusterName can't be empty")
-	Expect(input.Flavor).ShouldNot(HaveLen(0), "Invalid argument. input.Flavor can't be empty")
+	Expect(input.ClusterName).ShouldNot(BeEmpty(), "Invalid argument. input.ClusterName can't be empty")
+	Expect(input.Flavor).ShouldNot(BeEmpty(), "Invalid argument. input.Flavor can't be empty")
 
-	shared.Byf("getting cluster with name %s", input.ClusterName)
+	ginkgo.By(fmt.Sprintf("getting cluster with name %s", input.ClusterName))
 	cluster := framework.GetClusterByName(ctx, framework.GetClusterByNameInput{
 		Getter:    input.BootstrapClusterProxy.GetClient(),
 		Namespace: input.Namespace.Name,
@@ -70,10 +70,10 @@ func MachinePoolSpec(ctx context.Context, inputGetter func() MachinePoolSpecInpu
 	})
 	Expect(cluster).NotTo(BeNil(), "couldn't find CAPI cluster")
 
-	shared.Byf("creating an applying the %s template", input.Flavor)
+	ginkgo.By(fmt.Sprintf("creating an applying the %s template", input.Flavor))
 	configCluster := input.ConfigClusterFn(input.ClusterName, input.Namespace.Name)
 	configCluster.Flavor = input.Flavor
-	configCluster.WorkerMachineCount = pointer.Int64Ptr(1)
+	configCluster.WorkerMachineCount = ptr.To[int64](1)
 	workloadClusterTemplate := shared.GetTemplate(ctx, configCluster)
 	if input.UsesLaunchTemplate {
 		userDataTemplate := `#!/bin/bash
@@ -85,12 +85,12 @@ func MachinePoolSpec(ctx context.Context, inputGetter func() MachinePoolSpecInpu
 		userDataEncoded := base64.StdEncoding.EncodeToString([]byte(userData))
 		workloadClusterTemplate = []byte(strings.ReplaceAll(string(workloadClusterTemplate), "USER_DATA", userDataEncoded))
 	}
-	shared.Byf(string(workloadClusterTemplate))
-	shared.Byf("Applying the %s cluster template yaml to the cluster", configCluster.Flavor)
-	err := input.BootstrapClusterProxy.Apply(ctx, workloadClusterTemplate)
+	ginkgo.By(string(workloadClusterTemplate))
+	ginkgo.By(fmt.Sprintf("Applying the %s cluster template yaml to the cluster", configCluster.Flavor))
+	err := input.BootstrapClusterProxy.CreateOrUpdate(ctx, workloadClusterTemplate)
 	Expect(err).ShouldNot(HaveOccurred())
 
-	shared.Byf("Waiting for the machine pool to be running")
+	ginkgo.By("Waiting for the machine pool to be running")
 	mp := framework.DiscoveryAndWaitForMachinePools(ctx, framework.DiscoveryAndWaitForMachinePoolsInput{
 		Lister:  input.BootstrapClusterProxy.GetClient(),
 		Getter:  input.BootstrapClusterProxy.GetClient(),
@@ -98,7 +98,7 @@ func MachinePoolSpec(ctx context.Context, inputGetter func() MachinePoolSpecInpu
 	}, input.E2EConfig.GetIntervals("", "wait-worker-nodes")...)
 	Expect(len(mp)).To(Equal(1))
 
-	shared.Byf("Check the status of the node group")
+	ginkgo.By("Check the status of the node group")
 	eksClusterName := getEKSClusterName(input.Namespace.Name, input.ClusterName)
 	if input.ManagedMachinePool {
 		var nodeGroupName string
@@ -107,7 +107,7 @@ func MachinePoolSpec(ctx context.Context, inputGetter func() MachinePoolSpecInpu
 		} else {
 			nodeGroupName = getEKSNodegroupName(input.Namespace.Name, input.ClusterName)
 		}
-		verifyManagedNodeGroup(eksClusterName, nodeGroupName, true, input.AWSSession)
+		verifyManagedNodeGroup(ctx, eksClusterName, nodeGroupName, true, input.AWSSession)
 	} else {
 		asgName := getASGName(input.ClusterName)
 		verifyASG(eksClusterName, asgName, true, input.AWSSession)

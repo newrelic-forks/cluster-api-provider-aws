@@ -19,7 +19,7 @@ package v1beta2
 import (
 	"fmt"
 
-	"github.com/aws/aws-sdk-go/service/eks"
+	ekstypes "github.com/aws/aws-sdk-go-v2/service/eks/types"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	infrav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
@@ -51,16 +51,16 @@ func (s *ControlPlaneLoggingSpec) IsLogEnabled(logName string) bool {
 		return false
 	}
 
-	switch logName {
-	case eks.LogTypeApi:
+	switch ekstypes.LogType(logName) {
+	case ekstypes.LogTypeApi:
 		return s.APIServer
-	case eks.LogTypeAudit:
+	case ekstypes.LogTypeAudit:
 		return s.Audit
-	case eks.LogTypeAuthenticator:
+	case ekstypes.LogTypeAuthenticator:
 		return s.Authenticator
-	case eks.LogTypeControllerManager:
+	case ekstypes.LogTypeControllerManager:
 		return s.ControllerManager
-	case eks.LogTypeScheduler:
+	case ekstypes.LogTypeScheduler:
 		return s.Scheduler
 	default:
 		return false
@@ -130,10 +130,13 @@ type Addon struct {
 	Name string `json:"name"`
 	// Version is the version of the addon to use
 	Version string `json:"version"`
+	// Configuration of the EKS addon
+	// +optional
+	Configuration string `json:"configuration,omitempty"`
 	// ConflictResolution is used to declare what should happen if there
-	// are parameter conflicts. Defaults to none
-	// +kubebuilder:default=none
-	// +kubebuilder:validation:Enum=overwrite;none
+	// are parameter conflicts. Defaults to overwrite
+	// +kubebuilder:default=overwrite
+	// +kubebuilder:validation:Enum=overwrite;none;preserve
 	ConflictResolution *AddonResolution `json:"conflictResolution,omitempty"`
 	// ServiceAccountRoleArn is the ARN of an IAM role to bind to the addons service account
 	// +optional
@@ -151,6 +154,10 @@ var (
 	// AddonResolutionNone indicates that if there are parameter conflicts then
 	// resolution will not be done and an error will be reported.
 	AddonResolutionNone = AddonResolution("none")
+
+	// AddonResolutionPreserve indicates that if there are parameter conflicts then
+	// resolution will result in preserving the existing value
+	AddonResolutionPreserve = AddonResolution("preserve")
 )
 
 // AddonStatus defines the status for an addon.
@@ -215,8 +222,8 @@ const (
 	SecurityGroupCluster = infrav1.SecurityGroupRole("cluster")
 )
 
+// OIDCIdentityProviderConfig represents the configuration for an OIDC identity provider.
 type OIDCIdentityProviderConfig struct {
-
 	// This is also known as audience. The ID for the client application that makes
 	// authentication requests to the OpenID identity provider.
 	// +kubebuilder:validation:Required

@@ -13,6 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
+
 package v1beta2
 
 import (
@@ -60,12 +61,21 @@ func SetDefaults_AWSClusterSpec(s *AWSClusterSpec) { //nolint:golint,stylecheck
 			Name: AWSClusterControllerIdentityName,
 		}
 	}
-
-	// 	If ELB scheme is set to Internet-facing due to an API bug in versions > v0.6.6 and v0.7.0, default it to internet-facing.
 	if s.ControlPlaneLoadBalancer == nil {
-		s.ControlPlaneLoadBalancer = &AWSLoadBalancerSpec{Scheme: &ClassicELBSchemeInternetFacing}
-	} else if s.ControlPlaneLoadBalancer.Scheme != nil && s.ControlPlaneLoadBalancer.Scheme.String() == ClassicELBSchemeIncorrectInternetFacing.String() {
-		s.ControlPlaneLoadBalancer.Scheme = &ClassicELBSchemeInternetFacing
+		s.ControlPlaneLoadBalancer = &AWSLoadBalancerSpec{
+			Scheme: &ELBSchemeInternetFacing,
+		}
+	}
+	if s.ControlPlaneLoadBalancer.LoadBalancerType == "" {
+		s.ControlPlaneLoadBalancer.LoadBalancerType = LoadBalancerTypeClassic
+	}
+	if s.SecondaryControlPlaneLoadBalancer != nil {
+		if s.SecondaryControlPlaneLoadBalancer.LoadBalancerType == "" {
+			s.SecondaryControlPlaneLoadBalancer.LoadBalancerType = LoadBalancerTypeNLB
+		}
+		if s.SecondaryControlPlaneLoadBalancer.Scheme == nil {
+			s.SecondaryControlPlaneLoadBalancer.Scheme = &ELBSchemeInternal
+		}
 	}
 }
 
@@ -74,6 +84,14 @@ func SetDefaults_Labels(obj *metav1.ObjectMeta) { //nolint:golint,stylecheck
 	// Defaults to set label if no labels have been set
 	if obj.Labels == nil {
 		obj.Labels = map[string]string{
-			clusterv1.ClusterctlMoveHierarchyLabelName: ""}
+			clusterv1.ClusterctlMoveHierarchyLabel: ""}
 	}
+}
+
+// SetDefaults_AWSMachineSpec is used by defaulter-gen.
+func SetDefaults_AWSMachineSpec(obj *AWSMachineSpec) { //nolint:golint,stylecheck
+	if obj.InstanceMetadataOptions == nil {
+		obj.InstanceMetadataOptions = &InstanceMetadataOptions{}
+	}
+	obj.InstanceMetadataOptions.SetDefaults()
 }

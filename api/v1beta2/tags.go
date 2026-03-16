@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"regexp"
 
-	"github.com/google/go-cmp/cmp"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 
@@ -29,12 +28,6 @@ import (
 
 // Tags defines a map of tags.
 type Tags map[string]string
-
-// Equals returns true if the tags are equal.
-// This func is deprecated and should not be used.
-func (t Tags) Equals(other Tags) bool {
-	return cmp.Equal(t, other)
-}
 
 // HasOwned returns true if the tags contains a tag that marks the resource as owned by the cluster from the perspective of this management tooling.
 func (t Tags) HasOwned(cluster string) bool {
@@ -162,7 +155,7 @@ const (
 	// NameAWSProviderPrefix is the tag prefix we use to differentiate
 	// cluster-api-provider-aws owned components from other tooling that
 	// uses NameKubernetesClusterPrefix.
-	NameAWSProviderPrefix = "sigs.k8s.io/cluster-api-provider-aws/v2/"
+	NameAWSProviderPrefix = "sigs.k8s.io/cluster-api-provider-aws/"
 
 	// NameAWSProviderOwned is the tag name we use to differentiate
 	// cluster-api-provider-aws owned components from other tooling that
@@ -197,6 +190,17 @@ const (
 
 	// MachineNameTagKey is the key for machine name.
 	MachineNameTagKey = "MachineName"
+
+	// LaunchTemplateBootstrapDataSecret is the tag we use to store the `<namespace>/<name>`
+	// of the bootstrap secret that was used to create the user data for the latest launch
+	// template version.
+	LaunchTemplateBootstrapDataSecret = NameAWSProviderPrefix + "bootstrap-data-secret"
+
+	// LaunchTemplateBootstrapDataHash is the tag we use to store the hash of the raw bootstrap data.
+	// If bootstrap data is stored in S3, this hash relates to that data, not to the EC2 instance
+	// user data which only references the S3 object. We store this tag on launch template versions
+	// so that S3 bootstrap data objects can be deleted when they get outdated.
+	LaunchTemplateBootstrapDataHash = NameAWSProviderPrefix + "bootstrap-data-hash"
 )
 
 // ClusterTagKey generates the key for resources associated with a cluster.
@@ -250,6 +254,12 @@ func (b BuildParams) WithCloudProvider(name string) BuildParams {
 // Build builds tags including the cluster tag and returns them in map form.
 func Build(params BuildParams) Tags {
 	tags := make(Tags)
+
+	// Add the name tag first so that it can be overwritten by a user-provided tag in the `Additional` tags.
+	if params.Name != nil {
+		tags["Name"] = *params.Name
+	}
+
 	for k, v := range params.Additional {
 		tags[k] = v
 	}
@@ -259,10 +269,6 @@ func Build(params BuildParams) Tags {
 	}
 	if params.Role != nil {
 		tags[NameAWSClusterAPIRole] = *params.Role
-	}
-
-	if params.Name != nil {
-		tags["Name"] = *params.Name
 	}
 
 	return tags

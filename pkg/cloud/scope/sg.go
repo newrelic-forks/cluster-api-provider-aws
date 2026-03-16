@@ -31,7 +31,7 @@ type SGScope interface {
 	// SecurityGroups returns the cluster security groups as a map, it creates the map if empty.
 	SecurityGroups() map[infrav1.SecurityGroupRole]infrav1.SecurityGroup
 
-	// SecurityGroupOverrides returns the security groups that are overridden in the cluster spec
+	// SecurityGroupOverrides returns the security groups that are used as overrides in the cluster spec
 	SecurityGroupOverrides() map[infrav1.SecurityGroupRole]string
 
 	// VPC returns the cluster VPC.
@@ -42,4 +42,27 @@ type SGScope interface {
 
 	// Bastion returns the bastion details for the cluster.
 	Bastion() *infrav1.Bastion
+
+	// ControlPlaneLoadBalancer returns the load balancer settings that are requested.
+	// Deprecated: Use ControlPlaneLoadBalancers()
+	ControlPlaneLoadBalancer() *infrav1.AWSLoadBalancerSpec
+
+	// SetNatGatewaysIPs sets the Nat Gateways Public IPs.
+	SetNatGatewaysIPs(ips []string)
+
+	// GetNatGatewaysIPs gets the Nat Gateways Public IPs.
+	GetNatGatewaysIPs() []string
+
+	// AdditionalControlPlaneIngressRules returns the additional ingress rules for the control plane security group.
+	AdditionalControlPlaneIngressRules() []infrav1.IngressRule
+
+	// AdditionalNodeIngressRules returns the additional ingress rules for the node security group.
+	AdditionalNodeIngressRules() []infrav1.IngressRule
+
+	// ControlPlaneLoadBalancers returns both the ControlPlaneLoadBalancer and SecondaryControlPlaneLoadBalancer AWSLoadBalancerSpecs.
+	// The control plane load balancers should always be returned in the above order.
+	ControlPlaneLoadBalancers() []*infrav1.AWSLoadBalancerSpec
+
+	// NodePortIngressRuleCidrBlocks returns the CIDR blocks for the node NodePort ingress rules.
+	NodePortIngressRuleCidrBlocks() []string
 }

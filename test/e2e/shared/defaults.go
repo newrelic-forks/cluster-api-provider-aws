@@ -20,12 +20,12 @@ limitations under the License.
 package shared
 
 import (
+	"context"
 	"flag"
 	"strings"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/client"
-	"github.com/aws/aws-sdk-go/service/iam"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"k8s.io/apimachinery/pkg/runtime"
 	cgscheme "k8s.io/client-go/kubernetes/scheme"
 
@@ -36,19 +36,19 @@ import (
 // Constants.
 const (
 	DefaultSSHKeyPairName                = "cluster-api-provider-aws-sigs-k8s-io"
-	AMIPrefix                            = "capa-ami-ubuntu-18.04-"
-	DefaultImageLookupOrg                = "258751437250"
+	AMIPrefix                            = "capa-ami-ubuntu-24.04-"
+	DefaultImageLookupOrg                = "819546954734"
 	KubernetesVersion                    = "KUBERNETES_VERSION"
 	KubernetesVersionManagement          = "KUBERNETES_VERSION_MANAGEMENT"
 	CNIPath                              = "CNI"
 	CNIResources                         = "CNI_RESOURCES"
 	CNIAddonVersion                      = "VPC_ADDON_VERSION"
-	CorednsAddonVersion                  = "COREDNS_ADDON_VERSION"
 	GcWorkloadPath                       = "GC_WORKLOAD"
 	KubeproxyAddonVersion                = "KUBE_PROXY_ADDON_VERSION"
 	AwsNodeMachineType                   = "AWS_NODE_MACHINE_TYPE"
 	AwsAvailabilityZone1                 = "AWS_AVAILABILITY_ZONE_1"
 	AwsAvailabilityZone2                 = "AWS_AVAILABILITY_ZONE_2"
+	MultiAzFlavor                        = "multi-az"
 	LimitAzFlavor                        = "limit-az"
 	SpotInstancesFlavor                  = "spot-instances"
 	SSMFlavor                            = "ssm"
@@ -64,44 +64,65 @@ const (
 	StorageClassOutTreeZoneLabel         = "topology.ebs.csi.aws.com/zone"
 	GPUFlavor                            = "gpu"
 	InstanceVcpu                         = "AWS_MACHINE_TYPE_VCPU_USAGE"
-	PreCSIKubernetesVer                  = "PRE_1_23_KUBERNETES_VERSION"
-	PostCSIKubernetesVer                 = "POST_1_23_KUBERNETES_VERSION"
 	EFSSupport                           = "efs-support"
+	IntreeCloudProvider                  = "intree-cloud-provider"
+	MultiTenancy                         = "MULTI_TENANCY_"
+	EksUpgradeFromVersion                = "UPGRADE_FROM_VERSION"
+	EksUpgradeToVersion                  = "UPGRADE_TO_VERSION"
+
+	ClassicElbTestKubernetesFrom = "CLASSICELB_TEST_KUBERNETES_VERSION_FROM"
+	ClassicElbTestKubernetesTo   = "CLASSICELB_TEST_KUBERNETES_VERSION_TO"
+
+	DedicatedHostFlavor = "dedicated-host"
 )
 
+// ResourceQuotaFilePath is the path to the file that contains the resource usage.
 var ResourceQuotaFilePath = "/tmp/capa-e2e-resource-usage.lock"
+
 var (
+	// MultiTenancySimpleRole is the simple role for multi-tenancy test.
 	MultiTenancySimpleRole = MultitenancyRole("Simple")
-	MultiTenancyJumpRole   = MultitenancyRole("Jump")
+	// MultiTenancyJumpRole is the jump role for multi-tenancy test.
+	MultiTenancyJumpRole = MultitenancyRole("Jump")
+	// MultiTenancyNestedRole is the nested role for multi-tenancy test.
 	MultiTenancyNestedRole = MultitenancyRole("Nested")
-	MultiTenancyRoles      = []MultitenancyRole{MultiTenancySimpleRole, MultiTenancyJumpRole, MultiTenancyNestedRole}
-	roleLookupCache        = make(map[string]string)
+
+	// MultiTenancyRoles is the list of multi-tenancy roles.
+	MultiTenancyRoles = []MultitenancyRole{MultiTenancySimpleRole, MultiTenancyJumpRole, MultiTenancyNestedRole}
+	roleLookupCache   = make(map[string]string)
 )
 
+// MultitenancyRole is the role of the test.
 type MultitenancyRole string
 
+// EnvVarARN returns the environment variable name for the role ARN.
 func (m MultitenancyRole) EnvVarARN() string {
-	return "MULTI_TENANCY_" + strings.ToUpper(string(m)) + "_ROLE_ARN"
+	return MultiTenancy + strings.ToUpper(string(m)) + "_ROLE_ARN"
 }
 
+// EnvVarName returns the environment variable name for the role name.
 func (m MultitenancyRole) EnvVarName() string {
-	return "MULTI_TENANCY_" + strings.ToUpper(string(m)) + "_ROLE_NAME"
+	return MultiTenancy + strings.ToUpper(string(m)) + "_ROLE_NAME"
 }
 
+// EnvVarIdentity returns the environment variable name for the identity name.
 func (m MultitenancyRole) EnvVarIdentity() string {
-	return "MULTI_TENANCY_" + strings.ToUpper(string(m)) + "_IDENTITY_NAME"
+	return MultiTenancy + strings.ToUpper(string(m)) + "_IDENTITY_NAME"
 }
 
+// IdentityName returns the identity name.
 func (m MultitenancyRole) IdentityName() string {
 	return strings.ToLower(m.RoleName())
 }
 
+// RoleName returns the role name.
 func (m MultitenancyRole) RoleName() string {
 	return "CAPAMultiTenancy" + string(m)
 }
 
-func (m MultitenancyRole) SetEnvVars(prov client.ConfigProvider) error {
-	arn, err := m.RoleARN(prov)
+// SetEnvVars sets the environment variables for the role.
+func (m MultitenancyRole) SetEnvVars(ctx context.Context, cfg *aws.Config) error {
+	arn, err := m.RoleARN(ctx, cfg)
 	if err != nil {
 		return err
 	}
@@ -111,16 +132,17 @@ func (m MultitenancyRole) SetEnvVars(prov client.ConfigProvider) error {
 	return nil
 }
 
-func (m MultitenancyRole) RoleARN(prov client.ConfigProvider) (string, error) {
+// RoleARN returns the role ARN.
+func (m MultitenancyRole) RoleARN(ctx context.Context, cfg *aws.Config) (string, error) {
 	if roleARN, ok := roleLookupCache[m.RoleName()]; ok {
 		return roleARN, nil
 	}
-	iamSvc := iam.New(prov)
-	role, err := iamSvc.GetRole(&iam.GetRoleInput{RoleName: aws.String(m.RoleName())})
+	iamSvc := iam.NewFromConfig(*cfg)
+	role, err := iamSvc.GetRole(ctx, &iam.GetRoleInput{RoleName: aws.String(m.RoleName())})
 	if err != nil {
 		return "", err
 	}
-	roleARN := aws.StringValue(role.Role.Arn)
+	roleARN := *role.Role.Arn
 	roleLookupCache[m.RoleName()] = roleARN
 	return roleARN, nil
 }
@@ -146,7 +168,7 @@ func getLimitedResources() map[string]*ServiceQuota {
 		ServiceCode:         "vpc",
 		QuotaName:           "VPCs per Region",
 		QuotaCode:           "L-F678F1CE",
-		DesiredMinimumValue: 20,
+		DesiredMinimumValue: 25,
 	}
 
 	serviceQuotas["ec2-normal"] = &ServiceQuota{
@@ -184,6 +206,13 @@ func getLimitedResources() map[string]*ServiceQuota {
 		DesiredMinimumValue: 50,
 	}
 
+	serviceQuotas["eventBridge-rules"] = &ServiceQuota{
+		ServiceCode:         "events",
+		QuotaName:           "Maximum number of rules an account can have per event bus",
+		QuotaCode:           "L-244521F2",
+		DesiredMinimumValue: 500,
+	}
+
 	return serviceQuotas
 }
 
@@ -208,6 +237,7 @@ func CreateDefaultFlags(ctx *E2EContext) {
 	flag.BoolVar(&ctx.Settings.SkipCleanup, "skip-cleanup", false, "if true, the resource cleanup after tests will be skipped")
 	flag.BoolVar(&ctx.Settings.SkipCloudFormationDeletion, "skip-cloudformation-deletion", false, "if true, an AWS CloudFormation stack will not be deleted")
 	flag.BoolVar(&ctx.Settings.SkipCloudFormationCreation, "skip-cloudformation-creation", false, "if true, an AWS CloudFormation stack will not be created")
+	flag.BoolVar(&ctx.Settings.SkipQuotas, "skip-quotas", false, "if true, the requesting of quotas for aws services will be skipped")
 	flag.StringVar(&ctx.Settings.DataFolder, "data-folder", "", "path to the data folder")
 	flag.StringVar(&ctx.Settings.SourceTemplate, "source-template", "infrastructure-aws/withoutclusterclass/generated/cluster-template.yaml", "path to the data folder")
 }

@@ -17,21 +17,21 @@ limitations under the License.
 package bootstrap
 
 import (
-	"fmt"
+	"bytes"
 	"os"
 	"path"
 	"testing"
 
 	"github.com/awslabs/goformation/v4/cloudformation"
 	"github.com/sergi/go-diff/diffmatchpatch"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/yaml"
 
 	infrav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	iamv1 "sigs.k8s.io/cluster-api-provider-aws/v2/iam/api/v1beta1"
 )
 
-func Test_RenderCloudformation(t *testing.T) {
+func TestRenderCloudformation(t *testing.T) {
 	cases := []struct {
 		fixture  string
 		template func() Template
@@ -73,7 +73,7 @@ func Test_RenderCloudformation(t *testing.T) {
 			fixture: "customsuffix",
 			template: func() Template {
 				t := NewTemplate()
-				t.Spec.NameSuffix = pointer.StringPtr(".custom-suffix.com")
+				t.Spec.NameSuffix = ptr.To[string](".custom-suffix.com")
 				return t
 			},
 		},
@@ -174,6 +174,14 @@ func Test_RenderCloudformation(t *testing.T) {
 				return t
 			},
 		},
+		{
+			fixture: "with_allow_assume_role",
+			template: func() Template {
+				t := NewTemplate()
+				t.Spec.AllowAssumeRole = true
+				return t
+			},
+		},
 	}
 
 	for _, c := range cases {
@@ -193,11 +201,11 @@ func Test_RenderCloudformation(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if string(tData) != string(data) {
+			if !bytes.Equal(tData, data) {
 				dmp := diffmatchpatch.New()
 				diffs := dmp.DiffMain(string(tData), string(data), false)
 				out := dmp.DiffPrettyText(diffs)
-				t.Fatalf(fmt.Sprintf("Differing output (%s):\n%s", c.fixture, out))
+				t.Fatalf("Differing output (%s):\n%s", c.fixture, out)
 			}
 		})
 	}

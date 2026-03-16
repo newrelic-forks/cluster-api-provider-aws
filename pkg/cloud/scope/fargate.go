@@ -19,7 +19,7 @@ package scope
 import (
 	"context"
 
-	awsclient "github.com/aws/aws-sdk-go/aws/client"
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/pkg/errors"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -28,6 +28,7 @@ import (
 	ekscontrolplanev1 "sigs.k8s.io/cluster-api-provider-aws/v2/controlplane/eks/api/v1beta2"
 	expinfrav1 "sigs.k8s.io/cluster-api-provider-aws/v2/exp/api/v1beta2"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/pkg/cloud"
+	"sigs.k8s.io/cluster-api-provider-aws/v2/pkg/cloud/endpoints"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/pkg/cloud/throttle"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/pkg/logger"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
@@ -43,8 +44,7 @@ type FargateProfileScopeParams struct {
 	ControlPlane   *ekscontrolplanev1.AWSManagedControlPlane
 	FargateProfile *expinfrav1.AWSFargateProfile
 	ControllerName string
-	Endpoints      []ServiceEndpoint
-	Session        awsclient.ConfigProvider
+	Session        aws.Config
 
 	EnableIAM bool
 }
@@ -68,9 +68,9 @@ func NewFargateProfileScope(params FargateProfileScopeParams) (*FargateProfileSc
 		controllerName: params.ControllerName,
 	}
 
-	session, serviceLimiters, err := sessionForClusterWithRegion(params.Client, managedScope, params.ControlPlane.Spec.Region, params.Endpoints, params.Logger)
+	session, serviceLimiters, err := sessionForClusterWithRegion(params.Client, managedScope, params.ControlPlane.Spec.Region, params.Logger)
 	if err != nil {
-		return nil, errors.Errorf("failed to create aws session: %v", err)
+		return nil, errors.Errorf("failed to create aws v2 session: %v", err)
 	}
 
 	helper, err := patch.NewHelper(params.FargateProfile, params.Client)
@@ -85,7 +85,7 @@ func NewFargateProfileScope(params FargateProfileScopeParams) (*FargateProfileSc
 		ControlPlane:    params.ControlPlane,
 		FargateProfile:  params.FargateProfile,
 		patchHelper:     helper,
-		session:         session,
+		session:         *session,
 		serviceLimiters: serviceLimiters,
 		controllerName:  params.ControllerName,
 		enableIAM:       params.EnableIAM,
@@ -102,7 +102,7 @@ type FargateProfileScope struct {
 	ControlPlane   *ekscontrolplanev1.AWSManagedControlPlane
 	FargateProfile *expinfrav1.AWSFargateProfile
 
-	session         awsclient.ConfigProvider
+	session         aws.Config
 	serviceLimiters throttle.ServiceLimiters
 	controllerName  string
 
@@ -157,6 +157,14 @@ func (s *FargateProfileScope) SubnetIDs() []string {
 	return s.FargateProfile.Spec.SubnetIDs
 }
 
+// Partition returns the machine pool subnet IDs.
+func (s *FargateProfileScope) Partition() string {
+	if s.ControlPlane.Spec.Partition == "" {
+		s.ControlPlane.Spec.Partition = endpoints.GetPartitionFromRegion(s.ControlPlane.Spec.Region)
+	}
+	return s.ControlPlane.Spec.Partition
+}
+
 // IAMReadyFalse marks the ready condition false using warning if error isn't
 // empty.
 func (s *FargateProfileScope) IAMReadyFalse(reason string, err string) error {
@@ -169,6 +177,7 @@ func (s *FargateProfileScope) IAMReadyFalse(reason string, err string) error {
 		expinfrav1.IAMFargateRolesReadyCondition,
 		reason,
 		severity,
+		"%s",
 		err,
 	)
 	if err := s.PatchObject(); err != nil {
@@ -205,8 +214,8 @@ func (s *FargateProfileScope) ClusterObj() cloud.ClusterObject {
 	return s.Cluster
 }
 
-// Session returns the AWS SDK session. Used for creating clients.
-func (s *FargateProfileScope) Session() awsclient.ConfigProvider {
+// Session returns the AWS SDK V2 session. Used for creating clients.
+func (s *FargateProfileScope) Session() aws.Config {
 	return s.session
 }
 
