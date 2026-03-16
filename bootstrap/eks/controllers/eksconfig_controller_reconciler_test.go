@@ -24,13 +24,14 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 
 	eksbootstrapv1 "sigs.k8s.io/cluster-api-provider-aws/v2/bootstrap/eks/api/v1beta2"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/bootstrap/eks/internal/userdata"
 	ekscontrolplanev1 "sigs.k8s.io/cluster-api-provider-aws/v2/controlplane/eks/api/v1beta2"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta2"
 	"sigs.k8s.io/cluster-api/exp/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util"
 	v1beta1conditions "sigs.k8s.io/cluster-api/util/deprecated/v1beta1/conditions"
@@ -285,19 +286,6 @@ func newCluster(name string) *clusterv1.Cluster {
 			Name:      name,
 		},
 		Spec: clusterv1.ClusterSpec{
-<<<<<<< HEAD
-			ControlPlaneRef: &corev1.ObjectReference{
-				Name:      name,
-				Kind:      "AWSManagedControlPlane",
-				Namespace: "default",
-			},
-		},
-		Status: clusterv1.ClusterStatus{
-			InfrastructureReady: true,
-		},
-	}
-	conditions.MarkTrue(cluster, clusterv1.ControlPlaneInitializedCondition)
-=======
 			ControlPlaneRef: clusterv1.ContractVersionedObjectReference{
 				Name:     name,
 				Kind:     "AWSManagedControlPlane",
@@ -311,7 +299,6 @@ func newCluster(name string) *clusterv1.Cluster {
 			},
 		},
 	}
->>>>>>> a681199f1 (Merge pull request #5700 from nutanix-cloud-native/faiq/nodeadm-upstream)
 	return cluster
 }
 

@@ -42,12 +42,11 @@ import (
 	ekscontrolplanev1 "sigs.k8s.io/cluster-api-provider-aws/v2/controlplane/eks/api/v1beta2"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/pkg/logger"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/util/paused"
-	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
-	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	bsutil "sigs.k8s.io/cluster-api/bootstrap/util"
 	"sigs.k8s.io/cluster-api/feature"
 	"sigs.k8s.io/cluster-api/util"
-	v1beta1conditions "sigs.k8s.io/cluster-api/util/deprecated/v1beta1/conditions"
+	"sigs.k8s.io/cluster-api/util/conditions"
 	kubeconfigutil "sigs.k8s.io/cluster-api/util/kubeconfig"
 	"sigs.k8s.io/cluster-api/util/patch"
 	"sigs.k8s.io/cluster-api/util/predicates"
@@ -388,7 +387,7 @@ func (r *NodeadmConfigReconciler) SetupWithManager(ctx context.Context, mgr ctrl
 	err = c.Watch(
 		source.Kind[client.Object](mgr.GetCache(), &clusterv1.Cluster{},
 			handler.EnqueueRequestsFromMapFunc((r.ClusterToNodeadmConfigs)),
-			predicates.ClusterPausedTransitionsOrInfrastructureProvisioned(mgr.GetScheme(), logger.FromContext(ctx).GetLogger())),
+			predicates.ClusterPausedTransitionsOrInfrastructureReady(mgr.GetScheme(), logger.FromContext(ctx).GetLogger())),
 	)
 	if err != nil {
 		return errors.Wrap(err, "failed adding watch for Clusters to controller manager")

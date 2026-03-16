@@ -33,7 +33,7 @@ import (
 
 	"sigs.k8s.io/cluster-api-provider-aws/v2/pkg/logger"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/test/e2e/shared"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta2"
 	"sigs.k8s.io/cluster-api/test/framework"
 	"sigs.k8s.io/cluster-api/test/framework/clusterctl"
 	"sigs.k8s.io/cluster-api/util/patch"
@@ -146,7 +146,7 @@ func UpgradeMachineDeploymentsAndWait(ctx context.Context, input UpgradeMachineD
 		Expect(err).ToNot(HaveOccurred())
 
 		oldVersion := deployment.Spec.Template.Spec.Version
-		deployment.Spec.Template.Spec.Version = input.UpgradeVersion
+		deployment.Spec.Template.Spec.Version = &input.UpgradeVersion
 		if input.UpgradeMachineTemplate != nil {
 			deployment.Spec.Template.Spec.InfrastructureRef.Name = *input.UpgradeMachineTemplate
 		}
