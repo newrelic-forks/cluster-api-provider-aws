@@ -83,6 +83,14 @@ type AWSIAMRoleSpec struct {
 	// ExtraStatements are additional IAM statements to be included inline for the role.
 	ExtraStatements []iamv1.StatementEntry `json:"extraStatements,omitempty"`
 
+	// Path sets the path to the role.
+	// +optional
+	Path string `json:"path,omitempty"`
+
+	// PermissionsBoundary sets the ARN of the managed policy that is used to set the permissions boundary for the role.
+	// +optional
+	PermissionsBoundary string `json:"permissionsBoundary,omitempty"`
+
 	// TrustStatements is an IAM PolicyDocument defining what identities are allowed to assume this role.
 	// See "sigs.k8s.io/cluster-api-provider-aws/v2/cmd/clusterawsadm/api/iam/v1beta1" for more documentation.
 	TrustStatements []iamv1.StatementEntry `json:"trustStatements,omitempty"`
@@ -224,6 +232,9 @@ type AWSIAMConfigurationSpec struct {
 	// TODO: This field could be a pointer, but it seems it breaks setting default values?
 	// +optional
 	S3Buckets S3Buckets `json:"s3Buckets,omitempty"`
+
+	// AllowAssumeRole enables the sts:AssumeRole permission within the CAPA policies
+	AllowAssumeRole bool `json:"allowAssumeRole,omitempty"`
 }
 
 // GetObjectKind returns the AAWSIAMConfiguration's TypeMeta.

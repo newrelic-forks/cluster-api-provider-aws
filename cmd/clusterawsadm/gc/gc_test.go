@@ -18,10 +18,11 @@ package gc
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	. "github.com/onsi/gomega"
-	corev1 "k8s.io/api/core/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -29,16 +30,17 @@ import (
 
 	infrav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	ekscontrolplanev1 "sigs.k8s.io/cluster-api-provider-aws/v2/controlplane/eks/api/v1beta2"
-	expinfrav1 "sigs.k8s.io/cluster-api-provider-aws/v2/exp/api/v1beta2"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/pkg/annotations"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/cluster-api/controllers/external"
+)
+
+const (
+	testClusterName = "test-cluster"
 )
 
 func TestEnableGC(t *testing.T) {
 	RegisterTestingT(t)
-
-	testClusterName := "test-cluster"
 
 	testCases := []struct {
 		name         string
@@ -73,7 +75,7 @@ func TestEnableGC(t *testing.T) {
 		{
 			name:         "with managed control plane and existing annotation",
 			clusterName:  testClusterName,
-			existingObjs: newManagedClusterWithAnnotations(testClusterName, map[string]string{expinfrav1.ExternalResourceGCAnnotation: "false"}),
+			existingObjs: newManagedClusterWithAnnotations(testClusterName, map[string]string{infrav1.ExternalResourceGCAnnotation: "false"}),
 			expectError:  false,
 		},
 	}
@@ -103,11 +105,11 @@ func TestEnableGC(t *testing.T) {
 			cluster := tc.existingObjs[0].(*clusterv1.Cluster)
 			ref := cluster.Spec.InfrastructureRef
 
-			obj, err := external.Get(ctx, fake, ref, "default")
+			obj, err := external.GetObjectFromContractVersionedRef(ctx, fake, ref, cluster.Namespace)
 			g.Expect(err).NotTo(HaveOccurred())
 			g.Expect(obj).NotTo(BeNil())
 
-			annotationVal, hasAnnotation := annotations.Get(obj, expinfrav1.ExternalResourceGCAnnotation)
+			annotationVal, hasAnnotation := annotations.Get(obj, infrav1.ExternalResourceGCAnnotation)
 			g.Expect(hasAnnotation).To(BeTrue())
 			g.Expect(annotationVal).To(Equal("true"))
 		})
@@ -116,8 +118,6 @@ func TestEnableGC(t *testing.T) {
 
 func TestDisableGC(t *testing.T) {
 	RegisterTestingT(t)
-
-	testClusterName := "test-cluster"
 
 	testCases := []struct {
 		name         string
@@ -140,13 +140,13 @@ func TestDisableGC(t *testing.T) {
 		{
 			name:         "with managed control plane and with annotation",
 			clusterName:  testClusterName,
-			existingObjs: newManagedClusterWithAnnotations(testClusterName, map[string]string{expinfrav1.ExternalResourceGCAnnotation: "true"}),
+			existingObjs: newManagedClusterWithAnnotations(testClusterName, map[string]string{infrav1.ExternalResourceGCAnnotation: "true"}),
 			expectError:  false,
 		},
 		{
 			name:         "with awscluster and with annotation",
 			clusterName:  testClusterName,
-			existingObjs: newUnManagedClusterWithAnnotations(testClusterName, map[string]string{expinfrav1.ExternalResourceGCAnnotation: "true"}),
+			existingObjs: newUnManagedClusterWithAnnotations(testClusterName, map[string]string{infrav1.ExternalResourceGCAnnotation: "true"}),
 			expectError:  false,
 		},
 	}
@@ -176,19 +176,179 @@ func TestDisableGC(t *testing.T) {
 			cluster := tc.existingObjs[0].(*clusterv1.Cluster)
 			ref := cluster.Spec.InfrastructureRef
 
-			obj, err := external.Get(ctx, fake, ref, "default")
+			obj, err := external.GetObjectFromContractVersionedRef(ctx, fake, ref, cluster.Namespace)
 			g.Expect(err).NotTo(HaveOccurred())
 			g.Expect(obj).NotTo(BeNil())
 
-			annotationVal, hasAnnotation := annotations.Get(obj, expinfrav1.ExternalResourceGCAnnotation)
+			annotationVal, hasAnnotation := annotations.Get(obj, infrav1.ExternalResourceGCAnnotation)
 			g.Expect(hasAnnotation).To(BeTrue())
 			g.Expect(annotationVal).To(Equal("false"))
 		})
 	}
 }
 
+func TestConfigureGC(t *testing.T) {
+	RegisterTestingT(t)
+
+	testCases := []struct {
+		name         string
+		clusterName  string
+		gcTasks      []string
+		existingObjs []client.Object
+		expectError  bool
+	}{
+		{
+			name:         "no capi cluster",
+			clusterName:  testClusterName,
+			existingObjs: []client.Object{},
+			expectError:  true,
+		},
+		{
+			name:         "no infra cluster",
+			clusterName:  testClusterName,
+			existingObjs: newManagedCluster(testClusterName, true),
+			expectError:  true,
+		},
+		{
+			name:         "with managed control plane and no annotation",
+			clusterName:  testClusterName,
+			existingObjs: newManagedCluster(testClusterName, false),
+			gcTasks:      []string{"load-balancer", "target-group"},
+			expectError:  false,
+		},
+		{
+			name:         "with awscluster and no annotation",
+			clusterName:  testClusterName,
+			existingObjs: newUnManagedCluster(testClusterName, false),
+			gcTasks:      []string{"load-balancer", "security-group"},
+			expectError:  false,
+		},
+		{
+			name:         "with managed control plane and with annotation",
+			clusterName:  testClusterName,
+			existingObjs: newManagedClusterWithAnnotations(testClusterName, map[string]string{infrav1.ExternalResourceGCTasksAnnotation: "security-group"}),
+			gcTasks:      []string{"load-balancer", "target-group"},
+			expectError:  false,
+		},
+		{
+			name:         "with awscluster and with annotation",
+			clusterName:  testClusterName,
+			existingObjs: newUnManagedClusterWithAnnotations(testClusterName, map[string]string{infrav1.ExternalResourceGCTasksAnnotation: "security-group"}),
+			gcTasks:      []string{"load-balancer", "target-group"},
+			expectError:  false,
+		},
+		{
+			name:         "with awscluster and invalid gc tasks",
+			clusterName:  testClusterName,
+			existingObjs: newUnManagedCluster(testClusterName, false),
+			gcTasks:      []string{"load-balancer", "INVALID"},
+			expectError:  true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			g := NewWithT(t)
+
+			input := GCInput{
+				ClusterName: tc.clusterName,
+				Namespace:   "default",
+			}
+
+			fake := newFakeClient(scheme, tc.existingObjs...)
+			ctx := context.TODO()
+
+			proc, err := New(input, WithClient(fake))
+			g.Expect(err).NotTo(HaveOccurred())
+
+			resErr := proc.Configure(ctx, tc.gcTasks)
+			if tc.expectError {
+				g.Expect(resErr).To(HaveOccurred())
+				return
+			}
+			g.Expect(resErr).NotTo(HaveOccurred())
+
+			cluster := tc.existingObjs[0].(*clusterv1.Cluster)
+			ref := cluster.Spec.InfrastructureRef
+
+			obj, err := external.GetObjectFromContractVersionedRef(ctx, fake, ref, cluster.Namespace)
+			g.Expect(err).NotTo(HaveOccurred())
+			g.Expect(obj).NotTo(BeNil())
+
+			expected := strings.Join(tc.gcTasks, ",")
+			annotationVal, hasAnnotation := annotations.Get(obj, infrav1.ExternalResourceGCTasksAnnotation)
+
+			if expected != "" {
+				g.Expect(hasAnnotation).To(BeTrue())
+				g.Expect(annotationVal).To(Equal(expected))
+			} else {
+				g.Expect(hasAnnotation).To(BeFalse())
+			}
+		})
+	}
+}
+
 func newFakeClient(scheme *runtime.Scheme, objs ...client.Object) client.Client {
-	return fake.NewClientBuilder().WithScheme(scheme).WithObjects(objs...).Build()
+	// Add CRDs to the fake client so external.GetObjectFromContractVersionedRef can find them
+	crds := []client.Object{
+		&apiextensionsv1.CustomResourceDefinition{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "awsmanagedcontrolplanes.controlplane.cluster.x-k8s.io",
+				Labels: map[string]string{
+					"cluster.x-k8s.io/v1beta1": "v1beta2",
+				},
+			},
+			Spec: apiextensionsv1.CustomResourceDefinitionSpec{
+				Group: ekscontrolplanev1.GroupVersion.Group,
+				Names: apiextensionsv1.CustomResourceDefinitionNames{
+					Kind:   "AWSManagedControlPlane",
+					Plural: "awsmanagedcontrolplanes",
+				},
+				Versions: []apiextensionsv1.CustomResourceDefinitionVersion{
+					{
+						Name:    "v1beta2",
+						Served:  true,
+						Storage: true,
+						Schema: &apiextensionsv1.CustomResourceValidation{
+							OpenAPIV3Schema: &apiextensionsv1.JSONSchemaProps{
+								Type: "object",
+							},
+						},
+					},
+				},
+			},
+		},
+		&apiextensionsv1.CustomResourceDefinition{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "awsclusters.infrastructure.cluster.x-k8s.io",
+				Labels: map[string]string{
+					"cluster.x-k8s.io/v1beta1": "v1beta2",
+				},
+			},
+			Spec: apiextensionsv1.CustomResourceDefinitionSpec{
+				Group: infrav1.GroupVersion.Group,
+				Names: apiextensionsv1.CustomResourceDefinitionNames{
+					Kind:   "AWSCluster",
+					Plural: "awsclusters",
+				},
+				Versions: []apiextensionsv1.CustomResourceDefinitionVersion{
+					{
+						Name:    "v1beta2",
+						Served:  true,
+						Storage: true,
+						Schema: &apiextensionsv1.CustomResourceValidation{
+							OpenAPIV3Schema: &apiextensionsv1.JSONSchemaProps{
+								Type: "object",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	allObjs := append(crds, objs...)
+	return fake.NewClientBuilder().WithScheme(scheme).WithObjects(allObjs...).Build()
 }
 
 func newManagedCluster(name string, excludeInfra bool) []client.Object {
@@ -203,11 +363,10 @@ func newManagedCluster(name string, excludeInfra bool) []client.Object {
 				Namespace: "default",
 			},
 			Spec: clusterv1.ClusterSpec{
-				InfrastructureRef: &corev1.ObjectReference{
-					Name:       name,
-					Namespace:  "default",
-					Kind:       "AWSManagedControlPlane",
-					APIVersion: ekscontrolplanev1.GroupVersion.String(),
+				InfrastructureRef: clusterv1.ContractVersionedObjectReference{
+					Name:     name,
+					Kind:     "AWSManagedControlPlane",
+					APIGroup: ekscontrolplanev1.GroupVersion.Group,
 				},
 			},
 		},
@@ -250,11 +409,10 @@ func newUnManagedCluster(name string, excludeInfra bool) []client.Object {
 				Namespace: "default",
 			},
 			Spec: clusterv1.ClusterSpec{
-				InfrastructureRef: &corev1.ObjectReference{
-					Name:       name,
-					Namespace:  "default",
-					Kind:       "AWSCluster",
-					APIVersion: infrav1.GroupVersion.String(),
+				InfrastructureRef: clusterv1.ContractVersionedObjectReference{
+					Name:     name,
+					Kind:     "AWSCluster",
+					APIGroup: infrav1.GroupVersion.Group,
 				},
 			},
 		},

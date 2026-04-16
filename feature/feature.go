@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Package feature provides a feature-gate implementation for capa.
 package feature
 
 import (
@@ -53,6 +54,12 @@ const (
 	// alpha: v0.1
 	MachinePool featuregate.Feature = "MachinePool"
 
+	// MachinePoolMachines is a feature gate that enables creation of AWSMachine objects for AWSMachinePool and AWSManagedMachinePool.
+	//
+	// owner: @AndiDog
+	// alpha: v2.8
+	MachinePoolMachines featuregate.Feature = "MachinePoolMachines"
+
 	// EventBridgeInstanceState will use Event Bridge and notifications to keep instance state up-to-date
 	// owner: @gab-satchi
 	// alpha: v0.7?
@@ -70,6 +77,21 @@ const (
 	// owner: @richardcase
 	// alpha: v1.5
 	ExternalResourceGC featuregate.Feature = "ExternalResourceGC"
+
+	// AlternativeGCStrategy is used to enable garbage collection of external resources to be performed without resource group tagging API. It is usually needed in airgap env when tagging API is not available.
+	// owner: @wyike
+	// alpha: v2.0
+	AlternativeGCStrategy featuregate.Feature = "AlternativeGCStrategy"
+
+	// TagUnmanagedNetworkResources is used to disable tagging unmanaged networking resources.
+	// owner: @skarlso
+	// alpha: v2.0
+	TagUnmanagedNetworkResources featuregate.Feature = "TagUnmanagedNetworkResources"
+
+	// ROSA is used to enable ROSA support
+	// owner: @enxebre
+	// alpha: v2.2
+	ROSA featuregate.Feature = "ROSA"
 )
 
 func init() {
@@ -85,8 +107,12 @@ var defaultCAPAFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
 	EKSAllowAddRoles:              {Default: false, PreRelease: featuregate.Beta},
 	EKSFargate:                    {Default: false, PreRelease: featuregate.Alpha},
 	EventBridgeInstanceState:      {Default: false, PreRelease: featuregate.Alpha},
-	MachinePool:                   {Default: false, PreRelease: featuregate.Alpha},
+	MachinePool:                   {Default: true, PreRelease: featuregate.Beta},
+	MachinePoolMachines:           {Default: false, PreRelease: featuregate.Alpha},
 	AutoControllerIdentityCreator: {Default: true, PreRelease: featuregate.Alpha},
 	BootstrapFormatIgnition:       {Default: false, PreRelease: featuregate.Alpha},
-	ExternalResourceGC:            {Default: false, PreRelease: featuregate.Alpha},
+	ExternalResourceGC:            {Default: true, PreRelease: featuregate.Beta},
+	AlternativeGCStrategy:         {Default: false, PreRelease: featuregate.Beta},
+	TagUnmanagedNetworkResources:  {Default: true, PreRelease: featuregate.Alpha},
+	ROSA:                          {Default: false, PreRelease: featuregate.Alpha},
 }

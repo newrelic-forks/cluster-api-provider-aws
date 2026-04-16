@@ -19,10 +19,10 @@ package userdata
 import (
 	"testing"
 
-	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go-v2/aws"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/format"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	eksbootstrapv1 "sigs.k8s.io/cluster-api-provider-aws/v2/bootstrap/eks/api/v1beta2"
 )
@@ -49,7 +49,6 @@ func TestNewNode(t *testing.T) {
 				},
 			},
 			expectedBytes: []byte(`#cloud-config
-write_files:
 runcmd:
   - /etc/eks/bootstrap.sh test-cluster
 `),
@@ -67,7 +66,6 @@ runcmd:
 				},
 			},
 			expectedBytes: []byte(`#cloud-config
-write_files:
 runcmd:
   - /etc/eks/bootstrap.sh test-cluster --kubelet-extra-args '--node-labels=node-role.undistro.io/infra=true --register-with-taints=dedicated=infra:NoSchedule'
 `),
@@ -77,11 +75,10 @@ runcmd:
 			args: args{
 				input: &NodeInput{
 					ClusterName:      "test-cluster",
-					ContainerRuntime: pointer.String("containerd"),
+					ContainerRuntime: ptr.To[string]("containerd"),
 				},
 			},
 			expectedBytes: []byte(`#cloud-config
-write_files:
 runcmd:
   - /etc/eks/bootstrap.sh test-cluster --container-runtime containerd
 `),
@@ -95,11 +92,10 @@ runcmd:
 						"node-labels":          "node-role.undistro.io/infra=true",
 						"register-with-taints": "dedicated=infra:NoSchedule",
 					},
-					ContainerRuntime: pointer.String("containerd"),
+					ContainerRuntime: ptr.To[string]("containerd"),
 				},
 			},
 			expectedBytes: []byte(`#cloud-config
-write_files:
 runcmd:
   - /etc/eks/bootstrap.sh test-cluster --kubelet-extra-args '--node-labels=node-role.undistro.io/infra=true --register-with-taints=dedicated=infra:NoSchedule' --container-runtime containerd
 `),
@@ -109,12 +105,11 @@ runcmd:
 			args: args{
 				input: &NodeInput{
 					ClusterName:     "test-cluster",
-					ServiceIPV6Cidr: pointer.String("fe80:0000:0000:0000:0204:61ff:fe9d:f156/24"),
-					IPFamily:        pointer.String("ipv6"),
+					ServiceIPV6Cidr: ptr.To[string]("fe80:0000:0000:0000:0204:61ff:fe9d:f156/24"),
+					IPFamily:        ptr.To[string]("ipv6"),
 				},
 			},
 			expectedBytes: []byte(`#cloud-config
-write_files:
 runcmd:
   - /etc/eks/bootstrap.sh test-cluster --ip-family ipv6 --service-ipv6-cidr fe80:0000:0000:0000:0204:61ff:fe9d:f156/24
 `),
@@ -124,11 +119,10 @@ runcmd:
 			args: args{
 				input: &NodeInput{
 					ClusterName: "test-cluster",
-					UseMaxPods:  pointer.Bool(false),
+					UseMaxPods:  ptr.To[bool](false),
 				},
 			},
 			expectedBytes: []byte(`#cloud-config
-write_files:
 runcmd:
   - /etc/eks/bootstrap.sh test-cluster --use-max-pods false
 `),
@@ -138,11 +132,10 @@ runcmd:
 			args: args{
 				input: &NodeInput{
 					ClusterName:      "test-cluster",
-					APIRetryAttempts: pointer.Int(5),
+					APIRetryAttempts: ptr.To[int](5),
 				},
 			},
 			expectedBytes: []byte(`#cloud-config
-write_files:
 runcmd:
   - /etc/eks/bootstrap.sh test-cluster --aws-api-retry-attempts 5
 `),
@@ -152,12 +145,11 @@ runcmd:
 			args: args{
 				input: &NodeInput{
 					ClusterName:           "test-cluster",
-					PauseContainerAccount: pointer.String("12345678"),
-					PauseContainerVersion: pointer.String("v1"),
+					PauseContainerAccount: ptr.To[string]("12345678"),
+					PauseContainerVersion: ptr.To[string]("v1"),
 				},
 			},
 			expectedBytes: []byte(`#cloud-config
-write_files:
 runcmd:
   - /etc/eks/bootstrap.sh test-cluster --pause-container-account 12345678 --pause-container-version v1
 `),
@@ -167,11 +159,10 @@ runcmd:
 			args: args{
 				input: &NodeInput{
 					ClusterName:  "test-cluster",
-					DNSClusterIP: pointer.String("192.168.0.1"),
+					DNSClusterIP: ptr.To[string]("192.168.0.1"),
 				},
 			},
 			expectedBytes: []byte(`#cloud-config
-write_files:
 runcmd:
   - /etc/eks/bootstrap.sh test-cluster --dns-cluster-ip 192.168.0.1
 `),
@@ -181,11 +172,10 @@ runcmd:
 			args: args{
 				input: &NodeInput{
 					ClusterName:      "test-cluster",
-					DockerConfigJSON: pointer.String("{\"debug\":true}"),
+					DockerConfigJSON: ptr.To[string]("{\"debug\":true}"),
 				},
 			},
 			expectedBytes: []byte(`#cloud-config
-write_files:
 runcmd:
   - /etc/eks/bootstrap.sh test-cluster --docker-config-json '{"debug":true}'
 `),
@@ -199,7 +189,6 @@ runcmd:
 				},
 			},
 			expectedBytes: []byte(`#cloud-config
-write_files:
 runcmd:
   - "date"
   - "echo \"testing\""
@@ -215,7 +204,6 @@ runcmd:
 				},
 			},
 			expectedBytes: []byte(`#cloud-config
-write_files:
 runcmd:
   - /etc/eks/bootstrap.sh test-cluster
   - "date"
@@ -232,7 +220,6 @@ runcmd:
 				},
 			},
 			expectedBytes: []byte(`#cloud-config
-write_files:
 runcmd:
   - "echo \"testing pre\""
   - /etc/eks/bootstrap.sh test-cluster
@@ -244,11 +231,10 @@ runcmd:
 			args: args{
 				input: &NodeInput{
 					ClusterName:              "test-cluster",
-					BootstrapCommandOverride: pointer.String("/custom/mybootstrap.sh"),
+					BootstrapCommandOverride: ptr.To[string]("/custom/mybootstrap.sh"),
 				},
 			},
 			expectedBytes: []byte(`#cloud-config
-write_files:
 runcmd:
   - /custom/mybootstrap.sh test-cluster
 `),
@@ -280,7 +266,6 @@ runcmd:
 				},
 			},
 			expectedBytes: []byte(`#cloud-config
-write_files:
 runcmd:
   - /etc/eks/bootstrap.sh test-cluster
 disk_setup:
@@ -326,6 +311,31 @@ runcmd:
 `),
 		},
 		{
+			name: "with empty files",
+			args: args{
+				input: &NodeInput{
+					ClusterName: "test-cluster",
+					Files:       []eksbootstrapv1.File{},
+				},
+			},
+			expectedBytes: []byte(`#cloud-config
+runcmd:
+  - /etc/eks/bootstrap.sh test-cluster
+`),
+		},
+		{
+			name: "with nil files",
+			args: args{
+				input: &NodeInput{
+					ClusterName: "test-cluster",
+				},
+			},
+			expectedBytes: []byte(`#cloud-config
+runcmd:
+  - /etc/eks/bootstrap.sh test-cluster
+`),
+		},
+		{
 			name: "with ntp",
 			args: args{
 				input: &NodeInput{
@@ -337,7 +347,6 @@ runcmd:
 				},
 			},
 			expectedBytes: []byte(`#cloud-config
-write_files:
 runcmd:
   - /etc/eks/bootstrap.sh test-cluster
 ntp:
@@ -363,7 +372,6 @@ ntp:
 				},
 			},
 			expectedBytes: []byte(`#cloud-config
-write_files:
 runcmd:
   - /etc/eks/bootstrap.sh test-cluster
 users:

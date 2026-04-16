@@ -21,25 +21,30 @@ package shared
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
+	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	crclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	infrav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/cluster-api/test/framework"
 	"sigs.k8s.io/cluster-api/test/framework/clusterctl"
 	"sigs.k8s.io/cluster-api/util"
 )
 
 func SetupNamespace(ctx context.Context, specName string, e2eCtx *E2EContext) *corev1.Namespace {
-	Byf("Creating a namespace for hosting the %q test spec", specName)
+	By(fmt.Sprintf("Creating a namespace for hosting the %q test spec", specName))
 	namespace := framework.CreateNamespace(ctx, framework.CreateNamespaceInput{
 		Creator: e2eCtx.Environment.BootstrapClusterProxy.GetClient(),
 		Name:    fmt.Sprintf("%s-%s", specName, util.RandomString(6)),
@@ -48,7 +53,7 @@ func SetupNamespace(ctx context.Context, specName string, e2eCtx *E2EContext) *c
 }
 
 func SetupSpecNamespace(ctx context.Context, specName string, e2eCtx *E2EContext) *corev1.Namespace {
-	Byf("Creating a namespace for hosting the %q test spec", specName)
+	By(fmt.Sprintf("Creating a namespace for hosting the %q test spec", specName))
 	namespace, cancelWatches := framework.CreateNamespaceAndWatchEvents(ctx, framework.CreateNamespaceAndWatchEventsInput{
 		Creator:   e2eCtx.Environment.BootstrapClusterProxy.GetClient(),
 		ClientSet: e2eCtx.Environment.BootstrapClusterProxy.GetClientSet(),
@@ -64,21 +69,23 @@ func SetupSpecNamespace(ctx context.Context, specName string, e2eCtx *E2EContext
 }
 
 func DumpSpecResourcesAndCleanup(ctx context.Context, specName string, namespace *corev1.Namespace, e2eCtx *E2EContext) {
-	Byf("Dumping all the Cluster API resources in the %q namespace", namespace.Name)
+	By(fmt.Sprintf("Dumping all the Cluster API resources in the %q namespace", namespace.Name))
 	// Dump all Cluster API related resources to artifacts before deleting them.
 	cancelWatches := e2eCtx.Environment.Namespaces[namespace]
 	DumpSpecResources(ctx, e2eCtx, namespace)
-	Byf("Dumping all EC2 instances in the %q namespace", namespace.Name)
+	By(fmt.Sprintf("Dumping all EC2 instances in the %q namespace", namespace.Name))
 	DumpMachines(ctx, e2eCtx, namespace)
 	if !e2eCtx.Settings.SkipCleanup {
 		intervals := e2eCtx.E2EConfig.GetIntervals(specName, "wait-delete-cluster")
-		Byf("Deleting all clusters in the %q namespace with intervals %q", namespace.Name, intervals)
+		By(fmt.Sprintf("Deleting all clusters in the %q namespace with intervals %q", namespace.Name, intervals))
 		framework.DeleteAllClustersAndWait(ctx, framework.DeleteAllClustersAndWaitInput{
-			Client:    e2eCtx.Environment.BootstrapClusterProxy.GetClient(),
-			Namespace: namespace.Name,
+			ClusterProxy:         e2eCtx.Environment.BootstrapClusterProxy,
+			ClusterctlConfigPath: e2eCtx.Environment.ClusterctlConfigPath,
+			Namespace:            namespace.Name,
+			ArtifactFolder:       e2eCtx.Settings.ArtifactFolder,
 		}, intervals...)
 
-		Byf("Deleting namespace used for hosting the %q test spec", specName)
+		By(fmt.Sprintf("Deleting namespace used for hosting the %q test spec", specName))
 		framework.DeleteNamespace(ctx, framework.DeleteNamespaceInput{
 			Deleter: e2eCtx.Environment.BootstrapClusterProxy.GetClient(),
 			Name:    namespace.Name,
@@ -88,6 +95,16 @@ func DumpSpecResourcesAndCleanup(ctx context.Context, specName string, namespace
 		cancelWatches()
 	}
 	delete(e2eCtx.Environment.Namespaces, namespace)
+}
+
+// AWSStackLogCollector collects logs from the AWS stack.
+type AWSStackLogCollector struct {
+	E2EContext *E2EContext
+}
+
+// CollectInfrastructureLogs collects log from the infrastructure.
+func (k AWSStackLogCollector) CollectInfrastructureLogs(_ context.Context, _ crclient.Client, _ *clusterv1.Cluster, _ string) error {
+	return nil
 }
 
 func DumpMachines(ctx context.Context, e2eCtx *E2EContext, namespace *corev1.Namespace) {
@@ -150,14 +167,14 @@ func DumpMachine(ctx context.Context, e2eCtx *E2EContext, machine infrav1.AWSMac
 	}
 	machineLogBase := path.Join(logPath, "instances", machine.Namespace, machine.Name)
 	metaLog := path.Join(machineLogBase, "instance.log")
-	if err := os.MkdirAll(filepath.Dir(metaLog), 0750); err != nil {
-		fmt.Fprintf(GinkgoWriter, "couldn't create directory for file: path=%s, err=%s", metaLog, err)
+	if err := os.MkdirAll(filepath.Dir(metaLog), 0o750); err != nil {
+		fmt.Fprintf(GinkgoWriter, "Couldn't create directory for file: path=%q, err=%s\n", metaLog, err)
 	}
-	f, err := os.OpenFile(metaLog, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644) //nolint:gosec
+	f, err := os.OpenFile(metaLog, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644) //nolint:gosec
 	if err != nil {
 		return
 	}
-	defer f.Close() //nolint:gosec
+	defer f.Close()
 	fmt.Fprintf(f, "instance found: instance-id=%q\n", instanceID)
 	commandsForMachine(
 		ctx,
@@ -189,28 +206,38 @@ func DumpMachine(ctx context.Context, e2eCtx *E2EContext, machine infrav1.AWSMac
 				title: "containerd",
 				cmd:   "journalctl --no-pager -u containerd.service",
 			},
+			{
+				title: "pod-logs",
+				cmd:   "sudo tar -czf - -C /var/log pods | base64 -w0",
+			},
 		},
 	)
+
+	// Post-process pod-logs to have a tar.gz file instead of base64 date encoded in the log file.
+	// Note: It is not possible to directly output the raw tar.gz data because something truncates it.
+	if err := postProcessBase64LogData(filepath.Dir(f.Name()), "pod-logs.log", "pod-logs.tar.gz"); err != nil {
+		fmt.Fprintf(GinkgoWriter, "Failed to post-process pod-logs: %v\n", err)
+	}
 }
 
 func DumpSpecResources(ctx context.Context, e2eCtx *E2EContext, namespace *corev1.Namespace) {
 	framework.DumpAllResources(ctx, framework.DumpAllResourcesInput{
-		Lister:    e2eCtx.Environment.BootstrapClusterProxy.GetClient(),
-		Namespace: namespace.Name,
-		LogPath:   filepath.Join(e2eCtx.Settings.ArtifactFolder, "clusters", e2eCtx.Environment.BootstrapClusterProxy.GetName(), "resources"),
+		KubeConfigPath:       e2eCtx.Environment.BootstrapClusterProxy.GetKubeconfigPath(),
+		ClusterctlConfigPath: e2eCtx.Environment.ClusterctlConfigPath,
+		Lister:               e2eCtx.Environment.BootstrapClusterProxy.GetClient(),
+		Namespace:            namespace.Name,
+		LogPath:              filepath.Join(e2eCtx.Settings.ArtifactFolder, "clusters", e2eCtx.Environment.BootstrapClusterProxy.GetName(), "resources"),
 	})
 }
 
 func DumpSpecResourcesFromProxy(ctx context.Context, e2eCtx *E2EContext, namespace *corev1.Namespace, proxy framework.ClusterProxy) {
 	framework.DumpAllResources(ctx, framework.DumpAllResourcesInput{
-		Lister:    proxy.GetClient(),
-		Namespace: namespace.Name,
-		LogPath:   filepath.Join(e2eCtx.Settings.ArtifactFolder, "clusters", proxy.GetName(), "resources"),
+		KubeConfigPath:       proxy.GetKubeconfigPath(),
+		ClusterctlConfigPath: e2eCtx.Environment.ClusterctlConfigPath,
+		Lister:               proxy.GetClient(),
+		Namespace:            namespace.Name,
+		LogPath:              filepath.Join(e2eCtx.Settings.ArtifactFolder, "clusters", proxy.GetName(), "resources"),
 	})
-}
-
-func Byf(format string, a ...interface{}) {
-	By(fmt.Sprintf(format, a...))
 }
 
 // ConditionFn returns true if a condition exists.
@@ -230,7 +257,7 @@ func ConditionalIt(conditionFn ConditionFn, text string, body func()) bool {
 
 // LoadE2EConfig loads the e2econfig from the specified path.
 func LoadE2EConfig(configPath string) *clusterctl.E2EConfig {
-	//TODO: This is commented out as it assumes kubeadm and errors if its not there
+	// TODO: This is commented out as it assumes kubeadm and errors if its not there
 	// Remove localLoadE2EConfig and use the line below when this issue is resolved:
 	// https://github.com/kubernetes-sigs/cluster-api/issues/3983
 	// config := clusterctl.LoadE2EConfig(context.TODO(), clusterctl.LoadE2EConfigInput{ConfigPath: configPath})
@@ -248,7 +275,7 @@ func SetEnvVar(key, value string, private bool) {
 		printableValue = value
 	}
 
-	Byf("Setting environment variable: key=%s, value=%s", key, printableValue)
+	fmt.Fprintf(GinkgoWriter, time.Now().Format(time.StampMilli)+": "+"INFO"+": "+"Setting environment variable: key=%s, value=%s"+"\n", key, printableValue)
 	os.Setenv(key, value)
 }
 
@@ -268,4 +295,44 @@ func CreateAWSClusterControllerIdentity(k8sclient crclient.Client) {
 		},
 	}
 	_ = k8sclient.Create(context.TODO(), controllerIdentity)
+}
+
+func Byf(format string, a ...interface{}) {
+	By(fmt.Sprintf(format, a...))
+}
+
+func postProcessBase64LogData(dir, src, dst string) error {
+	sourceFile := filepath.Clean(path.Join(dir, src))
+	destinationFile := filepath.Clean(path.Join(dir, dst))
+
+	// Read input data
+	inputData, err := os.ReadFile(sourceFile)
+	if err != nil {
+		return errors.Wrapf(err, "unable to read source file %q", sourceFile)
+	}
+
+	// Extract second line which contains the data (first line contains the command)
+	inputStringData := strings.Split(string(inputData), "\n")[1]
+
+	// Trim spaces and the $ suffix.
+	inputStringData = strings.TrimSpace(inputStringData)
+	inputStringData = strings.TrimSuffix(inputStringData, "$")
+
+	// Base64 decode the data
+	outputData, err := base64.StdEncoding.DecodeString(inputStringData)
+	if err != nil {
+		return errors.Wrapf(err, "unable to base64 decode input data")
+	}
+
+	// Write the destination file
+	if err := os.WriteFile(destinationFile, outputData, 0600); err != nil {
+		return errors.Wrapf(err, "unable to write destination file at %q", destinationFile)
+	}
+
+	// Delete the source file.
+	if err := os.Remove(sourceFile); err != nil {
+		return errors.Wrapf(err, "unable to delete source file at %q", sourceFile)
+	}
+
+	return nil
 }

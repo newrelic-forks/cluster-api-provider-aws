@@ -17,6 +17,7 @@ limitations under the License.
 package v1beta2
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -25,8 +26,8 @@ import (
 
 	infrav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/pkg/eks"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
-	utildefaulting "sigs.k8s.io/cluster-api/util/defaulting"
+	utildefaulting "sigs.k8s.io/cluster-api-provider-aws/v2/util/defaulting"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 )
 
 func TestAWSFargateProfileDefault(t *testing.T) {
@@ -35,10 +36,11 @@ func TestAWSFargateProfileDefault(t *testing.T) {
 			ClusterName: "clustername",
 		},
 	}
-	t.Run("for AWSFargateProfile", utildefaulting.DefaultValidateTest(fargate))
-	fargate.Default()
+	t.Run("for AWSFargateProfile", utildefaulting.DefaultValidateTest(context.Background(), fargate, &awsFargateProfileWebhook{}))
 	g := NewWithT(t)
-	g.Expect(fargate.GetLabels()[clusterv1.ClusterLabelName]).To(BeEquivalentTo(fargate.Spec.ClusterName))
+	err := (&awsFargateProfileWebhook{}).Default(context.Background(), fargate)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(fargate.GetLabels()[clusterv1beta1.ClusterNameLabel]).To(BeEquivalentTo(fargate.Spec.ClusterName))
 	name, err := eks.GenerateEKSName(fargate.Name, fargate.Namespace, maxProfileNameLength)
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(fargate.Spec.ProfileName).To(BeEquivalentTo(name))
@@ -118,17 +120,19 @@ func TestAWSFargateProfileValidateRoleNameUpdate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tt.fargateProfile.ValidateUpdate(tt.before.DeepCopy())
+			warn, err := (&awsFargateProfileWebhook{}).ValidateUpdate(context.Background(), tt.before.DeepCopy(), tt.fargateProfile)
 			if tt.expectErr {
 				g.Expect(err).To(HaveOccurred())
 			} else {
 				g.Expect(err).To(Succeed())
 			}
+			// Nothing emits warnings yet
+			g.Expect(warn).To(BeEmpty())
 		})
 	}
 }
 
-func TestAWSFargateProfile_ValidateCreate(t *testing.T) {
+func TestAWSFargateProfileValidateCreate(t *testing.T) {
 	g := NewWithT(t)
 
 	tests := []struct {
@@ -178,12 +182,14 @@ func TestAWSFargateProfile_ValidateCreate(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tt.profile.ValidateCreate()
+			warn, err := (&awsFargateProfileWebhook{}).ValidateCreate(context.Background(), tt.profile)
 			if tt.wantErr {
 				g.Expect(err).To(HaveOccurred())
 			} else {
 				g.Expect(err).To(Succeed())
 			}
+			// Nothing emits warnings yet
+			g.Expect(warn).To(BeEmpty())
 		})
 	}
 }

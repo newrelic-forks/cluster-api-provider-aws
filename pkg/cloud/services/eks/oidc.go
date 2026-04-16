@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-	http://www.apache.org/licenses/LICENSE-2.0
+    http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -22,7 +22,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/aws/aws-sdk-go/service/eks"
+	ekstypes "github.com/aws/aws-sdk-go-v2/service/eks/types"
+	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -32,6 +33,7 @@ import (
 
 	"sigs.k8s.io/cluster-api-provider-aws/v2/cmd/clusterawsadm/converters"
 	iamv1 "sigs.k8s.io/cluster-api-provider-aws/v2/iam/api/v1beta1"
+	tagConverter "sigs.k8s.io/cluster-api-provider-aws/v2/pkg/cloud/converters"
 	"sigs.k8s.io/cluster-api/controllers/remote"
 )
 
@@ -42,7 +44,7 @@ var (
 	whitespaceRe = regexp.MustCompile(`(?m)[\t\n]`)
 )
 
-func (s *Service) reconcileOIDCProvider(cluster *eks.Cluster) error {
+func (s *Service) reconcileOIDCProvider(ctx context.Context, cluster *ekstypes.Cluster) error {
 	if !s.scope.ControlPlane.Spec.AssociateOIDCProvider || s.scope.ControlPlane.Status.OIDCProvider.ARN != "" {
 		return nil
 	}
@@ -53,12 +55,12 @@ func (s *Service) reconcileOIDCProvider(cluster *eks.Cluster) error {
 
 	s.scope.Info("Reconciling EKS OIDC Provider", "cluster-name", cluster.Name)
 
-	oidcProvider, err := s.FindAndVerifyOIDCProvider(cluster)
+	oidcProvider, err := s.FindAndVerifyOIDCProvider(ctx, cluster)
 	if err != nil {
 		return errors.Wrap(err, "failed to reconcile OIDC provider")
 	}
 	if oidcProvider == "" {
-		oidcProvider, err = s.CreateOIDCProvider(cluster)
+		oidcProvider, err = s.CreateOIDCProvider(ctx, cluster)
 		if err != nil {
 			return errors.Wrap(err, "failed to create OIDC provider")
 		}
@@ -74,17 +76,23 @@ func (s *Service) reconcileOIDCProvider(cluster *eks.Cluster) error {
 	if err := s.scope.PatchObject(); err != nil {
 		return errors.Wrap(err, "failed to update control plane with OIDC provider ARN")
 	}
+	// tagging the OIDC provider with the same tags of cluster
+	inputForTags := iam.TagOpenIDConnectProviderInput{
+		OpenIDConnectProviderArn: &s.scope.ControlPlane.Status.OIDCProvider.ARN,
+		Tags:                     tagConverter.MapToIAMTags(tagConverter.MapPtrToMap(cluster.Tags)),
+	}
+	if _, err := s.IAMClient.TagOpenIDConnectProvider(ctx, &inputForTags); err != nil {
+		return errors.Wrap(err, "failed to tag OIDC provider")
+	}
 
-	if err := s.reconcileTrustPolicy(); err != nil {
+	if err := s.reconcileTrustPolicy(ctx); err != nil {
 		return errors.Wrap(err, "failed to reconcile trust policy in workload cluster")
 	}
 
 	return nil
 }
 
-func (s *Service) reconcileTrustPolicy() error {
-	ctx := context.Background()
-
+func (s *Service) reconcileTrustPolicy(ctx context.Context) error {
 	clusterKey := client.ObjectKey{
 		Name:      s.scope.Name(),
 		Namespace: s.scope.Namespace(),
@@ -132,13 +140,13 @@ func (s *Service) reconcileTrustPolicy() error {
 	return remoteClient.Update(ctx, trustPolicyConfigMap)
 }
 
-func (s *Service) deleteOIDCProvider() error {
+func (s *Service) deleteOIDCProvider(ctx context.Context) error {
 	if !s.scope.ControlPlane.Spec.AssociateOIDCProvider || s.scope.ControlPlane.Status.OIDCProvider.ARN == "" {
 		return nil
 	}
 
 	providerARN := s.scope.ControlPlane.Status.OIDCProvider.ARN
-	if err := s.DeleteOIDCProvider(&providerARN); err != nil {
+	if err := s.DeleteOIDCProvider(ctx, &providerARN); err != nil {
 		return errors.Wrap(err, "failed to delete OIDC provider")
 	}
 

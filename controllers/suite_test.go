@@ -21,14 +21,18 @@ import (
 	"path"
 	"testing"
 
+	// +kubebuilder:scaffold:imports
+	corev1 "k8s.io/api/core/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 
-	// +kubebuilder:scaffold:imports
 	infrav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
+	rosacontrolplanev1 "sigs.k8s.io/cluster-api-provider-aws/v2/controlplane/rosa/api/v1beta2"
+	expinfrav1 "sigs.k8s.io/cluster-api-provider-aws/v2/exp/api/v1beta2"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/test/helpers"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	kubeadmv1beta1 "sigs.k8s.io/cluster-api/api/controlplane/kubeadm/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 )
 
 var (
@@ -45,6 +49,12 @@ func TestMain(m *testing.M) {
 func setup() {
 	utilruntime.Must(infrav1.AddToScheme(scheme.Scheme))
 	utilruntime.Must(clusterv1.AddToScheme(scheme.Scheme))
+	utilruntime.Must(kubeadmv1beta1.AddToScheme(scheme.Scheme))
+	utilruntime.Must(rosacontrolplanev1.AddToScheme(scheme.Scheme))
+	utilruntime.Must(expinfrav1.AddToScheme(scheme.Scheme))
+	utilruntime.Must(corev1.AddToScheme(scheme.Scheme))
+	utilruntime.Must(clusterv1.AddToScheme(scheme.Scheme))
+
 	testEnvConfig := helpers.NewTestEnvironmentConfiguration([]string{
 		path.Join("config", "crd", "bases"),
 	},
@@ -60,11 +70,17 @@ func setup() {
 	if err := (&infrav1.AWSMachine{}).SetupWebhookWithManager(testEnv); err != nil {
 		panic(fmt.Sprintf("Unable to setup AWSMachine webhook: %v", err))
 	}
-	if err := (&infrav1.AWSMachineTemplateWebhook{}).SetupWebhookWithManager(testEnv); err != nil {
+	if err := (&infrav1.AWSMachineTemplate{}).SetupWebhookWithManager(testEnv); err != nil {
 		panic(fmt.Sprintf("Unable to setup AWSMachineTemplate webhook: %v", err))
 	}
 	if err := (&infrav1.AWSClusterControllerIdentity{}).SetupWebhookWithManager(testEnv); err != nil {
 		panic(fmt.Sprintf("Unable to setup AWSClusterControllerIdentity webhook: %v", err))
+	}
+	if err := (&expinfrav1.ROSAMachinePool{}).SetupWebhookWithManager(testEnv); err != nil {
+		panic(fmt.Sprintf("Unable to setup ROSAMachinePool webhook: %v", err))
+	}
+	if err := (&rosacontrolplanev1.ROSAControlPlane{}).SetupWebhookWithManager(testEnv); err != nil {
+		panic(fmt.Sprintf("Unable to setup ROSAControlPlane webhook: %v", err))
 	}
 	go func() {
 		fmt.Println("Starting the manager")

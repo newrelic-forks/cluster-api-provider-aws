@@ -28,9 +28,22 @@ Fixes #
 **Special notes for your reviewer**:
 
 **Checklist**:
-<!-- Put an "X" character inside the brackets of each completed task. Some may be optional depending on the PR in which case these can be deleted -->
+<!-- Put an "X" character inside the brackets of each completed task. Some may be optional depending on the PR in which case these can be deleted 
+
+ Please add an icon to the title of this PR, the icon will be either ⚠️ (:warning:, major or breaking changes), ✨ (:sparkles:, feature additions), 🐛 (:bug:, patch and bugfixes), 📖 (:book:, documentation or proposals), or 🌱 (:seedling:, minor or other) 
+-->
 
 - [ ] squashed commits
 - [ ] includes documentation
+- [ ] includes emoji in title 
 - [ ] adds unit tests
 - [ ] adds or updates e2e tests
+
+**Release note**:
+<!--  Write your release note:
+1. Enter your extended release note in the below block. If the PR requires additional action from users switching to the new release, include the string "action required".
+2. If no release note is required, just write "NONE".
+-->
+```release-note
+
+```

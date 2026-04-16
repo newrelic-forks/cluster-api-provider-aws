@@ -20,9 +20,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go-v2/aws"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 )
 
 func TestAWSMachineTemplateValidateCreate(t *testing.T) {
@@ -38,7 +38,7 @@ func TestAWSMachineTemplateValidateCreate(t *testing.T) {
 				Spec: AWSMachineTemplateSpec{
 					Template: AWSMachineTemplateResource{
 						Spec: AWSMachineSpec{
-							ProviderID: pointer.StringPtr("something"),
+							ProviderID: ptr.To[string]("something"),
 						},
 					},
 				},
@@ -80,6 +80,145 @@ func TestAWSMachineTemplateValidateCreate(t *testing.T) {
 			},
 			wantError: false,
 		},
+		{
+			name: "hostID and dynamicHostAllocation are mutually exclusive",
+			inputTemplate: &AWSMachineTemplate{
+				ObjectMeta: metav1.ObjectMeta{},
+				Spec: AWSMachineTemplateSpec{
+					Template: AWSMachineTemplateResource{
+						Spec: AWSMachineSpec{
+							InstanceType: "test",
+							Tenancy:      "host",
+							HostID:       aws.String("h-1234567890abcdef0"),
+							DynamicHostAllocation: &DynamicHostAllocationSpec{
+								Tags: map[string]string{
+									"Environment": "test",
+								},
+							},
+						},
+					},
+				},
+			},
+			wantError: true,
+		},
+		{
+			name: "hostAffinity=host requires hostID or dynamicHostAllocation",
+			inputTemplate: &AWSMachineTemplate{
+				ObjectMeta: metav1.ObjectMeta{},
+				Spec: AWSMachineTemplateSpec{
+					Template: AWSMachineTemplateResource{
+						Spec: AWSMachineSpec{
+							InstanceType: "test",
+							Tenancy:      "host",
+							HostAffinity: ptr.To("host"),
+						},
+					},
+				},
+			},
+			wantError: true,
+		},
+		{
+			name: "hostAffinity=host with hostID is valid",
+			inputTemplate: &AWSMachineTemplate{
+				ObjectMeta: metav1.ObjectMeta{},
+				Spec: AWSMachineTemplateSpec{
+					Template: AWSMachineTemplateResource{
+						Spec: AWSMachineSpec{
+							InstanceType: "test",
+							Tenancy:      "host",
+							HostAffinity: ptr.To("host"),
+							HostID:       ptr.To("h-09dcf61cb388b0149"),
+						},
+					},
+				},
+			},
+			wantError: false,
+		},
+		{
+			name: "hostAffinity=host with dynamicHostAllocation is valid",
+			inputTemplate: &AWSMachineTemplate{
+				ObjectMeta: metav1.ObjectMeta{},
+				Spec: AWSMachineTemplateSpec{
+					Template: AWSMachineTemplateResource{
+						Spec: AWSMachineSpec{
+							InstanceType: "test",
+							Tenancy:      "host",
+							HostAffinity: ptr.To("host"),
+							DynamicHostAllocation: &DynamicHostAllocationSpec{
+								Tags: map[string]string{"env": "test"},
+							},
+						},
+					},
+				},
+			},
+			wantError: false,
+		},
+		{
+			name: "hostAffinity=default without hostID is valid",
+			inputTemplate: &AWSMachineTemplate{
+				ObjectMeta: metav1.ObjectMeta{},
+				Spec: AWSMachineTemplateSpec{
+					Template: AWSMachineTemplateResource{
+						Spec: AWSMachineSpec{
+							InstanceType: "test",
+							HostAffinity: ptr.To("default"),
+						},
+					},
+				},
+			},
+			wantError: false,
+		},
+		{
+			name: "hostID without tenancy=host is invalid",
+			inputTemplate: &AWSMachineTemplate{
+				ObjectMeta: metav1.ObjectMeta{},
+				Spec: AWSMachineTemplateSpec{
+					Template: AWSMachineTemplateResource{
+						Spec: AWSMachineSpec{
+							InstanceType: "test",
+							Tenancy:      "default",
+							HostID:       ptr.To("h-09dcf61cb388b0149"),
+						},
+					},
+				},
+			},
+			wantError: true,
+		},
+		{
+			name: "hostAffinity=host without tenancy=host is invalid",
+			inputTemplate: &AWSMachineTemplate{
+				ObjectMeta: metav1.ObjectMeta{},
+				Spec: AWSMachineTemplateSpec{
+					Template: AWSMachineTemplateResource{
+						Spec: AWSMachineSpec{
+							InstanceType: "test",
+							Tenancy:      "default",
+							HostAffinity: ptr.To("host"),
+							HostID:       ptr.To("h-09dcf61cb388b0149"),
+						},
+					},
+				},
+			},
+			wantError: true,
+		},
+		{
+			name: "dynamicHostAllocation without tenancy=host is invalid",
+			inputTemplate: &AWSMachineTemplate{
+				ObjectMeta: metav1.ObjectMeta{},
+				Spec: AWSMachineTemplateSpec{
+					Template: AWSMachineTemplateResource{
+						Spec: AWSMachineSpec{
+							InstanceType: "test",
+							Tenancy:      "dedicated",
+							DynamicHostAllocation: &DynamicHostAllocationSpec{
+								Tags: map[string]string{"env": "test"},
+							},
+						},
+					},
+				},
+			},
+			wantError: true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -103,33 +242,34 @@ func TestAWSMachineTemplateValidateUpdate(t *testing.T) {
 		wantError        bool
 	}{
 		{
-			name: "don't allow ssm parameter store",
+			name: "don't allow updates",
 			modifiedTemplate: &AWSMachineTemplate{
 				ObjectMeta: metav1.ObjectMeta{},
 				Spec: AWSMachineTemplateSpec{
 					Template: AWSMachineTemplateResource{
 						Spec: AWSMachineSpec{
-							CloudInit: CloudInit{
-								SecureSecretsBackend: SecretBackendSSMParameterStore,
-							},
-							InstanceType: "test",
+							InstanceType: "test2",
 						},
 					},
 				},
 			},
-			wantError: false,
+			wantError: true,
 		},
 		{
-			name: "allow secrets manager",
+			name: "allow defaulted values to update",
 			modifiedTemplate: &AWSMachineTemplate{
 				ObjectMeta: metav1.ObjectMeta{},
 				Spec: AWSMachineTemplateSpec{
 					Template: AWSMachineTemplateResource{
 						Spec: AWSMachineSpec{
-							CloudInit: CloudInit{
-								SecureSecretsBackend: SecretBackendSecretsManager,
-							},
+							CloudInit:    CloudInit{},
 							InstanceType: "test",
+							InstanceMetadataOptions: &InstanceMetadataOptions{
+								HTTPEndpoint:            InstanceMetadataEndpointStateEnabled,
+								HTTPPutResponseHopLimit: 1,
+								HTTPTokens:              HTTPTokensStateOptional,
+								InstanceMetadataTags:    InstanceMetadataEndpointStateDisabled,
+							},
 						},
 					},
 				},

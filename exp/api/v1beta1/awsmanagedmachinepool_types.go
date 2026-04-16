@@ -23,8 +23,7 @@ import (
 
 	infrav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	iamv1 "sigs.k8s.io/cluster-api-provider-aws/v2/iam/api/v1beta1"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
-	"sigs.k8s.io/cluster-api/errors"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 )
 
 // ManagedMachineAMIType specifies which AWS AMI to use for a managed MachinePool.
@@ -37,6 +36,10 @@ const (
 	Al2x86_64GPU ManagedMachineAMIType = "AL2_x86_64_GPU"
 	// Al2Arm64 is the Arm AMI type.
 	Al2Arm64 ManagedMachineAMIType = "AL2_ARM_64"
+	// Al2023x86_64 is the AL2023 x86-64 AMI type.
+	Al2023x86_64 ManagedMachineAMIType = "AL2023_x86_64_STANDARD"
+	// Al2023Arm64 is the AL2023 Arm AMI type.
+	Al2023Arm64 ManagedMachineAMIType = "AL2023_ARM_64_STANDARD"
 )
 
 // ManagedMachinePoolCapacityType specifies the capacity type to be used for the managed MachinePool.
@@ -49,12 +52,10 @@ const (
 	ManagedMachinePoolCapacityTypeSpot ManagedMachinePoolCapacityType = "spot"
 )
 
-var (
-	// DefaultEKSNodegroupRole is the name of the default IAM role to use for EKS nodegroups
-	// if no other role is supplied in the spec and if iam role creation is not enabled. The default
-	// can be created using clusterawsadm or created manually.
-	DefaultEKSNodegroupRole = fmt.Sprintf("eks-nodegroup%s", iamv1.DefaultNameSuffix)
-)
+// DefaultEKSNodegroupRole is the name of the default IAM role to use for EKS nodegroups
+// if no other role is supplied in the spec and if iam role creation is not enabled. The default
+// can be created using clusterawsadm or created manually.
+var DefaultEKSNodegroupRole = fmt.Sprintf("eks-nodegroup%s", iamv1.DefaultNameSuffix)
 
 // AWSManagedMachinePoolSpec defines the desired state of AWSManagedMachinePool.
 type AWSManagedMachinePoolSpec struct {
@@ -99,7 +100,7 @@ type AWSManagedMachinePoolSpec struct {
 	AMIVersion *string `json:"amiVersion,omitempty"`
 
 	// AMIType defines the AMI type
-	// +kubebuilder:validation:Enum:=AL2_x86_64;AL2_x86_64_GPU;AL2_ARM_64;CUSTOM
+	// +kubebuilder:validation:Enum:=AL2_x86_64;AL2_x86_64_GPU;AL2_ARM_64;AL2023_x86_64_STANDARD;AL2023_ARM_64_STANDARD;CUSTOM
 	// +kubebuilder:default:=AL2_x86_64
 	// +optional
 	AMIType *ManagedMachineAMIType `json:"amiType,omitempty"`
@@ -207,7 +208,7 @@ type AWSManagedMachinePoolStatus struct {
 	// can be added as events to the MachinePool object and/or logged in the
 	// controller's output.
 	// +optional
-	FailureReason *errors.MachineStatusError `json:"failureReason,omitempty"`
+	FailureReason *string `json:"failureReason,omitempty"`
 
 	// FailureMessage will be set in the event that there is a terminal problem
 	// reconciling the MachinePool and will contain a more verbose string suitable
@@ -230,10 +231,11 @@ type AWSManagedMachinePoolStatus struct {
 
 	// Conditions defines current service state of the managed machine pool
 	// +optional
-	Conditions clusterv1.Conditions `json:"conditions,omitempty"`
+	Conditions clusterv1beta1.Conditions `json:"conditions,omitempty"`
 }
 
 // +kubebuilder:object:root=true
+// +kubebuilder:unservedversion
 // +kubebuilder:resource:path=awsmanagedmachinepools,scope=Namespaced,categories=cluster-api,shortName=awsmmp
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.ready",description="MachinePool ready status"
@@ -249,16 +251,17 @@ type AWSManagedMachinePool struct {
 }
 
 // GetConditions returns the observations of the operational state of the AWSManagedMachinePool resource.
-func (r *AWSManagedMachinePool) GetConditions() clusterv1.Conditions {
+func (r *AWSManagedMachinePool) GetConditions() clusterv1beta1.Conditions {
 	return r.Status.Conditions
 }
 
-// SetConditions sets the underlying service state of the AWSManagedMachinePool to the predescribed clusterv1.Conditions.
-func (r *AWSManagedMachinePool) SetConditions(conditions clusterv1.Conditions) {
+// SetConditions sets the underlying service state of the AWSManagedMachinePool to the predescribed clusterv1beta1.Conditions.
+func (r *AWSManagedMachinePool) SetConditions(conditions clusterv1beta1.Conditions) {
 	r.Status.Conditions = conditions
 }
 
 // +kubebuilder:object:root=true
+// +kubebuilder:unservedversion
 
 // AWSManagedMachinePoolList contains a list of AWSManagedMachinePools.
 type AWSManagedMachinePoolList struct {

@@ -19,7 +19,7 @@ package scope
 import (
 	"context"
 
-	awsclient "github.com/aws/aws-sdk-go/aws/client"
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/pkg/errors"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -28,11 +28,13 @@ import (
 	ekscontrolplanev1 "sigs.k8s.io/cluster-api-provider-aws/v2/controlplane/eks/api/v1beta2"
 	expinfrav1 "sigs.k8s.io/cluster-api-provider-aws/v2/exp/api/v1beta2"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/pkg/cloud"
+	"sigs.k8s.io/cluster-api-provider-aws/v2/pkg/cloud/endpoints"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/pkg/cloud/throttle"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/pkg/logger"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
-	"sigs.k8s.io/cluster-api/util/conditions"
-	"sigs.k8s.io/cluster-api/util/patch"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
+	v1beta1conditions "sigs.k8s.io/cluster-api/util/deprecated/v1beta1/conditions"
+	v1beta1patch "sigs.k8s.io/cluster-api/util/deprecated/v1beta1/patch"
 )
 
 // FargateProfileScopeParams defines the input parameters used to create a new Scope.
@@ -43,8 +45,7 @@ type FargateProfileScopeParams struct {
 	ControlPlane   *ekscontrolplanev1.AWSManagedControlPlane
 	FargateProfile *expinfrav1.AWSFargateProfile
 	ControllerName string
-	Endpoints      []ServiceEndpoint
-	Session        awsclient.ConfigProvider
+	Session        aws.Config
 
 	EnableIAM bool
 }
@@ -68,12 +69,12 @@ func NewFargateProfileScope(params FargateProfileScopeParams) (*FargateProfileSc
 		controllerName: params.ControllerName,
 	}
 
-	session, serviceLimiters, err := sessionForClusterWithRegion(params.Client, managedScope, params.ControlPlane.Spec.Region, params.Endpoints, params.Logger)
+	session, serviceLimiters, err := sessionForClusterWithRegion(params.Client, managedScope, params.ControlPlane.Spec.Region, params.Logger)
 	if err != nil {
-		return nil, errors.Errorf("failed to create aws session: %v", err)
+		return nil, errors.Errorf("failed to create aws v2 session: %v", err)
 	}
 
-	helper, err := patch.NewHelper(params.FargateProfile, params.Client)
+	helper, err := v1beta1patch.NewHelper(params.FargateProfile, params.Client)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to init patch helper")
 	}
@@ -85,7 +86,7 @@ func NewFargateProfileScope(params FargateProfileScopeParams) (*FargateProfileSc
 		ControlPlane:    params.ControlPlane,
 		FargateProfile:  params.FargateProfile,
 		patchHelper:     helper,
-		session:         session,
+		session:         *session,
 		serviceLimiters: serviceLimiters,
 		controllerName:  params.ControllerName,
 		enableIAM:       params.EnableIAM,
@@ -96,13 +97,13 @@ func NewFargateProfileScope(params FargateProfileScopeParams) (*FargateProfileSc
 type FargateProfileScope struct {
 	logger.Logger
 	Client      client.Client
-	patchHelper *patch.Helper
+	patchHelper *v1beta1patch.Helper
 
 	Cluster        *clusterv1.Cluster
 	ControlPlane   *ekscontrolplanev1.AWSManagedControlPlane
 	FargateProfile *expinfrav1.AWSFargateProfile
 
-	session         awsclient.ConfigProvider
+	session         aws.Config
 	serviceLimiters throttle.ServiceLimiters
 	controllerName  string
 
@@ -157,18 +158,27 @@ func (s *FargateProfileScope) SubnetIDs() []string {
 	return s.FargateProfile.Spec.SubnetIDs
 }
 
+// Partition returns the machine pool subnet IDs.
+func (s *FargateProfileScope) Partition() string {
+	if s.ControlPlane.Spec.Partition == "" {
+		s.ControlPlane.Spec.Partition = endpoints.GetPartitionFromRegion(s.ControlPlane.Spec.Region)
+	}
+	return s.ControlPlane.Spec.Partition
+}
+
 // IAMReadyFalse marks the ready condition false using warning if error isn't
 // empty.
 func (s *FargateProfileScope) IAMReadyFalse(reason string, err string) error {
-	severity := clusterv1.ConditionSeverityWarning
+	severity := clusterv1beta1.ConditionSeverityWarning
 	if err == "" {
-		severity = clusterv1.ConditionSeverityInfo
+		severity = clusterv1beta1.ConditionSeverityInfo
 	}
-	conditions.MarkFalse(
+	v1beta1conditions.MarkFalse(
 		s.FargateProfile,
 		expinfrav1.IAMFargateRolesReadyCondition,
 		reason,
 		severity,
+		"%s",
 		err,
 	)
 	if err := s.PatchObject(); err != nil {
@@ -182,7 +192,7 @@ func (s *FargateProfileScope) PatchObject() error {
 	return s.patchHelper.Patch(
 		context.TODO(),
 		s.FargateProfile,
-		patch.WithOwnedConditions{Conditions: []clusterv1.ConditionType{
+		v1beta1patch.WithOwnedConditions{Conditions: []clusterv1beta1.ConditionType{
 			expinfrav1.EKSFargateProfileReadyCondition,
 			expinfrav1.EKSFargateCreatingCondition,
 			expinfrav1.EKSFargateDeletingCondition,
@@ -201,12 +211,12 @@ func (s *FargateProfileScope) InfraCluster() cloud.ClusterObject {
 }
 
 // ClusterObj returns the cluster object.
-func (s *FargateProfileScope) ClusterObj() cloud.ClusterObject {
+func (s *FargateProfileScope) ClusterObj() *clusterv1.Cluster {
 	return s.Cluster
 }
 
-// Session returns the AWS SDK session. Used for creating clients.
-func (s *FargateProfileScope) Session() awsclient.ConfigProvider {
+// Session returns the AWS SDK V2 session. Used for creating clients.
+func (s *FargateProfileScope) Session() aws.Config {
 	return s.session
 }
 

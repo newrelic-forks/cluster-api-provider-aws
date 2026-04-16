@@ -23,10 +23,9 @@ import (
 	"context"
 
 	"github.com/gofrs/flock"
-	"github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/config"
+	"github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cluster-api-provider-aws/v2/test/e2e/shared"
 	capi_e2e "sigs.k8s.io/cluster-api/test/e2e"
@@ -42,12 +41,12 @@ var _ = ginkgo.Context("[unmanaged] [Cluster API Framework] [ClusterClass]", fun
 		Expect(e2eCtx.Environment.BootstrapClusterProxy).ToNot(BeNil(), "Invalid argument. BootstrapClusterProxy can't be nil")
 	})
 
-	ginkgo.Describe("Self Hosted Spec [ClusterClass]", func() {
+	ginkgo.PDescribe("Self Hosted Spec [ClusterClass]", func() {
 		ginkgo.BeforeEach(func() {
 			// As the resources cannot be defined by the It() clause in CAPI tests, using the largest values required for all It() tests in this CAPI test.
-			requiredResources = &shared.TestResource{EC2Normal: 2 * e2eCtx.Settings.InstanceVCPU, IGW: 1, NGW: 1, VPC: 1, ClassicLB: 1, EIP: 1}
+			requiredResources = &shared.TestResource{EC2Normal: 2 * e2eCtx.Settings.InstanceVCPU, IGW: 1, NGW: 1, VPC: 1, ClassicLB: 1, EIP: 1, EventBridgeRules: 50}
 			requiredResources.WriteRequestedResources(e2eCtx, "capi-clusterctl-self-hosted-test-clusterclass")
-			Expect(shared.AcquireResources(requiredResources, config.GinkgoConfig.ParallelNode, flock.New(shared.ResourceQuotaFilePath))).To(Succeed())
+			Expect(shared.AcquireResources(requiredResources, ginkgo.GinkgoParallelProcess(), flock.New(shared.ResourceQuotaFilePath))).To(Succeed())
 		})
 
 		capi_e2e.SelfHostedSpec(ctx, func() capi_e2e.SelfHostedSpecInput {
@@ -62,16 +61,18 @@ var _ = ginkgo.Context("[unmanaged] [Cluster API Framework] [ClusterClass]", fun
 		})
 
 		ginkgo.AfterEach(func() {
-			shared.ReleaseResources(requiredResources, config.GinkgoConfig.ParallelNode, flock.New(shared.ResourceQuotaFilePath))
+			shared.ReleaseResources(requiredResources, ginkgo.GinkgoParallelProcess(), flock.New(shared.ResourceQuotaFilePath))
 		})
 	})
 
-	ginkgo.Describe("Cluster Upgrade Spec - HA control plane with workers [K8s-Upgrade] [ClusterClass]", func() {
+	ginkgo.PDescribe("Cluster Upgrade Spec - HA control plane with workers [K8s-Upgrade] [ClusterClass]", func() {
 		ginkgo.BeforeEach(func() {
-			// As the resources cannot be defined by the It() clause in CAPI tests, using the largest values required for all It() tests in this CAPI test.
-			requiredResources = &shared.TestResource{EC2Normal: 5 * e2eCtx.Settings.InstanceVCPU, IGW: 2, NGW: 2, VPC: 2, ClassicLB: 2, EIP: 2}
-			requiredResources.WriteRequestedResources(e2eCtx, "capi-cluster-upgrade-clusterclass-test")
-			Expect(shared.AcquireResources(requiredResources, config.GinkgoConfig.ParallelNode, flock.New(shared.ResourceQuotaFilePath))).To(Succeed())
+			if !e2eCtx.Settings.SkipQuotas {
+				// As the resources cannot be defined by the It() clause in CAPI tests, using the largest values required for all It() tests in this CAPI test.
+				requiredResources = &shared.TestResource{EC2Normal: 5 * e2eCtx.Settings.InstanceVCPU, IGW: 2, NGW: 2, VPC: 2, ClassicLB: 2, EIP: 2, EventBridgeRules: 50}
+				requiredResources.WriteRequestedResources(e2eCtx, "capi-cluster-upgrade-clusterclass-test")
+				Expect(shared.AcquireResources(requiredResources, ginkgo.GinkgoParallelProcess(), flock.New(shared.ResourceQuotaFilePath))).To(Succeed())
+			}
 		})
 
 		capi_e2e.ClusterUpgradeConformanceSpec(ctx, func() capi_e2e.ClusterUpgradeConformanceSpecInput {
@@ -82,22 +83,26 @@ var _ = ginkgo.Context("[unmanaged] [Cluster API Framework] [ClusterClass]", fun
 				ArtifactFolder:           e2eCtx.Settings.ArtifactFolder,
 				SkipCleanup:              e2eCtx.Settings.SkipCleanup,
 				SkipConformanceTests:     true,
-				ControlPlaneMachineCount: pointer.Int64(3),
-				Flavor:                   pointer.String(shared.TopologyFlavor),
+				ControlPlaneMachineCount: ptr.To[int64](3),
+				Flavor:                   ptr.To[string](shared.TopologyFlavor),
 			}
 		})
 
 		ginkgo.AfterEach(func() {
-			shared.ReleaseResources(requiredResources, config.GinkgoConfig.ParallelNode, flock.New(shared.ResourceQuotaFilePath))
+			if !e2eCtx.Settings.SkipQuotas {
+				shared.ReleaseResources(requiredResources, ginkgo.GinkgoParallelProcess(), flock.New(shared.ResourceQuotaFilePath))
+			}
 		})
 	})
 
 	ginkgo.Describe("ClusterClass Changes Spec - SSA immutability checks [ClusterClass]", func() {
 		ginkgo.BeforeEach(func() {
-			// As the resources cannot be defined by the It() clause in CAPI tests, using the largest values required for all It() tests in this CAPI test.
-			requiredResources = &shared.TestResource{EC2Normal: 5 * e2eCtx.Settings.InstanceVCPU, IGW: 2, NGW: 2, VPC: 2, ClassicLB: 2, EIP: 2}
-			requiredResources.WriteRequestedResources(e2eCtx, "capi-cluster-ssa-clusterclass-test")
-			Expect(shared.AcquireResources(requiredResources, config.GinkgoConfig.ParallelNode, flock.New(shared.ResourceQuotaFilePath))).To(Succeed())
+			if !e2eCtx.Settings.SkipQuotas {
+				// As the resources cannot be defined by the It() clause in CAPI tests, using the largest values required for all It() tests in this CAPI test.
+				requiredResources = &shared.TestResource{EC2Normal: 5 * e2eCtx.Settings.InstanceVCPU, IGW: 2, NGW: 2, VPC: 2, ClassicLB: 2, EIP: 2, EventBridgeRules: 50}
+				requiredResources.WriteRequestedResources(e2eCtx, "capi-cluster-ssa-clusterclass-test")
+				Expect(shared.AcquireResources(requiredResources, ginkgo.GinkgoParallelProcess(), flock.New(shared.ResourceQuotaFilePath))).To(Succeed())
+			}
 		})
 
 		capi_e2e.ClusterClassChangesSpec(ctx, func() capi_e2e.ClusterClassChangesSpecInput {
@@ -112,7 +117,7 @@ var _ = ginkgo.Context("[unmanaged] [Cluster API Framework] [ClusterClass]", fun
 				// ControlPlaneTemplate of the ClusterClass after the initial Cluster creation.
 				// The test verifies that these fields are rolled out to the ControlPlane.
 				ModifyControlPlaneFields: map[string]interface{}{
-					"spec.machineTemplate.nodeDrainTimeout": "10s",
+					"spec.machineTemplate.spec.deletion.nodeDrainTimeoutSeconds": int64(10),
 				},
 				// ModifyMachineDeploymentBootstrapConfigTemplateFields are the fields which will be set on the
 				// BootstrapConfigTemplate of all MachineDeploymentClasses of the ClusterClass after the initial Cluster creation.
@@ -134,7 +139,9 @@ var _ = ginkgo.Context("[unmanaged] [Cluster API Framework] [ClusterClass]", fun
 		})
 
 		ginkgo.AfterEach(func() {
-			shared.ReleaseResources(requiredResources, config.GinkgoConfig.ParallelNode, flock.New(shared.ResourceQuotaFilePath))
+			if !e2eCtx.Settings.SkipQuotas {
+				shared.ReleaseResources(requiredResources, ginkgo.GinkgoParallelProcess(), flock.New(shared.ResourceQuotaFilePath))
+			}
 		})
 	})
 })

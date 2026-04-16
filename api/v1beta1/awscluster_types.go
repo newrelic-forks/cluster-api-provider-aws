@@ -19,7 +19,7 @@ package v1beta1
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 )
 
 const (
@@ -45,7 +45,7 @@ type AWSClusterSpec struct {
 
 	// ControlPlaneEndpoint represents the endpoint used to communicate with the control plane.
 	// +optional
-	ControlPlaneEndpoint clusterv1.APIEndpoint `json:"controlPlaneEndpoint"`
+	ControlPlaneEndpoint clusterv1beta1.APIEndpoint `json:"controlPlaneEndpoint"`
 
 	// AdditionalTags is an optional set of tags to add to AWS resources managed by the AWS provider, in addition to the
 	// ones added by default.
@@ -87,8 +87,10 @@ type AWSClusterSpec struct {
 	// +optional
 	Bastion Bastion `json:"bastion"`
 
-	// IdentityRef is a reference to a identity to be used when reconciling this cluster
 	// +optional
+
+	// IdentityRef is a reference to an identity to be used when reconciling the managed control plane.
+	// If no identity is specified, the default identity for this controller will be used.
 	IdentityRef *AWSIdentityReference `json:"identityRef,omitempty"`
 
 	// S3Bucket contains options to configure a supporting S3 bucket for this
@@ -198,13 +200,14 @@ type AWSLoadBalancerSpec struct {
 // AWSClusterStatus defines the observed state of AWSCluster.
 type AWSClusterStatus struct {
 	// +kubebuilder:default=false
-	Ready          bool                     `json:"ready"`
-	Network        NetworkStatus            `json:"networkStatus,omitempty"`
-	FailureDomains clusterv1.FailureDomains `json:"failureDomains,omitempty"`
-	Bastion        *Instance                `json:"bastion,omitempty"`
-	Conditions     clusterv1.Conditions     `json:"conditions,omitempty"`
+	Ready          bool                          `json:"ready"`
+	Network        NetworkStatus                 `json:"networkStatus,omitempty"`
+	FailureDomains clusterv1beta1.FailureDomains `json:"failureDomains,omitempty"`
+	Bastion        *Instance                     `json:"bastion,omitempty"`
+	Conditions     clusterv1beta1.Conditions     `json:"conditions,omitempty"`
 }
 
+// S3Bucket defines a supporting S3 bucket for the cluster, currently can be optionally used for Ignition.
 type S3Bucket struct {
 	// ControlPlaneIAMInstanceProfile is a name of the IAMInstanceProfile, which will be allowed
 	// to read control-plane node bootstrap data from S3 Bucket.
@@ -222,6 +225,7 @@ type S3Bucket struct {
 }
 
 // +kubebuilder:object:root=true
+// +kubebuilder:unservedversion
 // +kubebuilder:resource:path=awsclusters,scope=Namespaced,categories=cluster-api,shortName=awsc
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Cluster",type="string",JSONPath=".metadata.labels.cluster\\.x-k8s\\.io/cluster-name",description="Cluster to which this AWSCluster belongs"
@@ -240,6 +244,7 @@ type AWSCluster struct {
 }
 
 // +kubebuilder:object:root=true
+// +kubebuilder:unservedversion
 
 // AWSClusterList contains a list of AWSCluster.
 type AWSClusterList struct {
@@ -249,12 +254,12 @@ type AWSClusterList struct {
 }
 
 // GetConditions returns the observations of the operational state of the AWSCluster resource.
-func (r *AWSCluster) GetConditions() clusterv1.Conditions {
+func (r *AWSCluster) GetConditions() clusterv1beta1.Conditions {
 	return r.Status.Conditions
 }
 
-// SetConditions sets the underlying service state of the AWSCluster to the predescribed clusterv1.Conditions.
-func (r *AWSCluster) SetConditions(conditions clusterv1.Conditions) {
+// SetConditions sets the underlying service state of the AWSCluster to the predescribed clusterv1beta1.Conditions.
+func (r *AWSCluster) SetConditions(conditions clusterv1beta1.Conditions) {
 	r.Status.Conditions = conditions
 }
 

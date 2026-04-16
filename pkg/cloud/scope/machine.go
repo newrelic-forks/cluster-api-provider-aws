@@ -19,25 +19,24 @@ package scope
 import (
 	"context"
 	"encoding/base64"
-	"fmt"
 
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	infrav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	ekscontrolplanev1 "sigs.k8s.io/cluster-api-provider-aws/v2/controlplane/eks/api/v1beta2"
+	"sigs.k8s.io/cluster-api-provider-aws/v2/exp/api/v1beta2"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/pkg/logger"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
-	"sigs.k8s.io/cluster-api/controllers/noderefutil"
-	capierrors "sigs.k8s.io/cluster-api/errors"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/annotations"
-	"sigs.k8s.io/cluster-api/util/conditions"
-	"sigs.k8s.io/cluster-api/util/patch"
+	v1beta1conditions "sigs.k8s.io/cluster-api/util/deprecated/v1beta1/conditions"
+	v1beta1patch "sigs.k8s.io/cluster-api/util/deprecated/v1beta1/patch"
 )
 
 // MachineScopeParams defines the input parameters used to create a new MachineScope.
@@ -74,15 +73,14 @@ func NewMachineScope(params MachineScopeParams) (*MachineScope, error) {
 		params.Logger = logger.NewLogger(log)
 	}
 
-	helper, err := patch.NewHelper(params.AWSMachine, params.Client)
+	helper, err := v1beta1patch.NewHelper(params.AWSMachine, params.Client)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to init patch helper")
 	}
 	return &MachineScope{
-		Logger:      *params.Logger,
-		client:      params.Client,
-		patchHelper: helper,
-
+		Logger:       *params.Logger,
+		client:       params.Client,
+		patchHelper:  helper,
 		Cluster:      params.Cluster,
 		Machine:      params.Machine,
 		InfraCluster: params.InfraCluster,
@@ -94,7 +92,7 @@ func NewMachineScope(params MachineScopeParams) (*MachineScope, error) {
 type MachineScope struct {
 	logger.Logger
 	client      client.Client
-	patchHelper *patch.Helper
+	patchHelper *v1beta1patch.Helper
 
 	Cluster      *clusterv1.Cluster
 	Machine      *clusterv1.Machine
@@ -117,6 +115,19 @@ func (m *MachineScope) IsControlPlane() bool {
 	return util.IsControlPlaneMachine(m.Machine)
 }
 
+// IsMachinePoolMachine returns true if the machine is created for a machinepool.
+func (m *MachineScope) IsMachinePoolMachine() bool {
+	if _, ok := m.Machine.GetLabels()[clusterv1.MachinePoolNameLabel]; ok {
+		return true
+	}
+	for _, owner := range m.Machine.OwnerReferences {
+		if owner.Kind == v1beta2.KindMachinePool {
+			return true
+		}
+	}
+	return false
+}
+
 // Role returns the machine role from the labels.
 func (m *MachineScope) Role() string {
 	if util.IsControlPlaneMachine(m.Machine) {
@@ -127,11 +138,11 @@ func (m *MachineScope) Role() string {
 
 // GetInstanceID returns the AWSMachine instance id by parsing Spec.ProviderID.
 func (m *MachineScope) GetInstanceID() *string {
-	parsed, err := noderefutil.NewProviderID(m.GetProviderID())
+	parsed, err := NewProviderID(m.GetProviderID())
 	if err != nil {
 		return nil
 	}
-	return pointer.StringPtr(parsed.ID())
+	return ptr.To[string](parsed.ID())
 }
 
 // GetProviderID returns the AWSMachine providerID from the spec.
@@ -144,13 +155,13 @@ func (m *MachineScope) GetProviderID() string {
 
 // SetProviderID sets the AWSMachine providerID in spec.
 func (m *MachineScope) SetProviderID(instanceID, availabilityZone string) {
-	providerID := fmt.Sprintf("aws:///%s/%s", availabilityZone, instanceID)
-	m.AWSMachine.Spec.ProviderID = pointer.StringPtr(providerID)
+	providerID := GenerateProviderID(availabilityZone, instanceID)
+	m.AWSMachine.Spec.ProviderID = ptr.To[string](providerID)
 }
 
 // SetInstanceID sets the AWSMachine instanceID in spec.
 func (m *MachineScope) SetInstanceID(instanceID string) {
-	m.AWSMachine.Spec.InstanceID = pointer.StringPtr(instanceID)
+	m.AWSMachine.Spec.InstanceID = ptr.To[string](instanceID)
 }
 
 // GetInstanceState returns the AWSMachine instance state from the status.
@@ -175,11 +186,11 @@ func (m *MachineScope) SetNotReady() {
 
 // SetFailureMessage sets the AWSMachine status failure message.
 func (m *MachineScope) SetFailureMessage(v error) {
-	m.AWSMachine.Status.FailureMessage = pointer.StringPtr(v.Error())
+	m.AWSMachine.Status.FailureMessage = ptr.To[string](v.Error())
 }
 
 // SetFailureReason sets the AWSMachine status failure reason.
-func (m *MachineScope) SetFailureReason(v capierrors.MachineStatusError) {
+func (m *MachineScope) SetFailureReason(v string) {
 	m.AWSMachine.Status.FailureReason = &v
 }
 
@@ -197,6 +208,7 @@ func (m *MachineScope) UseSecretsManager(userDataFormat string) bool {
 	return !m.AWSMachine.Spec.CloudInit.InsecureSkipSecretsManager && !m.UseIgnition(userDataFormat)
 }
 
+// UseIgnition returns true if the AWSMachine should use Ignition.
 func (m *MachineScope) UseIgnition(userDataFormat string) bool {
 	return userDataFormat == "ignition" || (m.AWSMachine.Spec.Ignition != nil)
 }
@@ -247,7 +259,7 @@ func (m *MachineScope) SetSecretCount(i int32) {
 }
 
 // SetAddresses sets the AWSMachine address status.
-func (m *MachineScope) SetAddresses(addrs []clusterv1.MachineAddress) {
+func (m *MachineScope) SetAddresses(addrs []clusterv1beta1.MachineAddress) {
 	m.AWSMachine.Status.Addresses = addrs
 }
 
@@ -267,6 +279,7 @@ func (m *MachineScope) GetRawBootstrapData() ([]byte, error) {
 	return data, err
 }
 
+// GetRawBootstrapDataWithFormat returns the bootstrap data from the secret in the Machine's bootstrap.dataSecretName.
 func (m *MachineScope) GetRawBootstrapDataWithFormat() ([]byte, string, error) {
 	if m.Machine.Spec.Bootstrap.DataSecretName == nil {
 		return nil, "", errors.New("error retrieving bootstrap data: linked Machine's bootstrap.dataSecretName is nil")
@@ -290,7 +303,7 @@ func (m *MachineScope) GetRawBootstrapDataWithFormat() ([]byte, string, error) {
 func (m *MachineScope) PatchObject() error {
 	// Always update the readyCondition by summarizing the state of other conditions.
 	// A step counter is added to represent progress during the provisioning process (instead we are hiding during the deletion process).
-	applicableConditions := []clusterv1.ConditionType{
+	applicableConditions := []clusterv1beta1.ConditionType{
 		infrav1.InstanceReadyCondition,
 		infrav1.SecurityGroupsReadyCondition,
 	}
@@ -299,17 +312,17 @@ func (m *MachineScope) PatchObject() error {
 		applicableConditions = append(applicableConditions, infrav1.ELBAttachedCondition)
 	}
 
-	conditions.SetSummary(m.AWSMachine,
-		conditions.WithConditions(applicableConditions...),
-		conditions.WithStepCounterIf(m.AWSMachine.ObjectMeta.DeletionTimestamp.IsZero()),
-		conditions.WithStepCounter(),
+	v1beta1conditions.SetSummary(m.AWSMachine,
+		v1beta1conditions.WithConditions(applicableConditions...),
+		v1beta1conditions.WithStepCounterIf(m.AWSMachine.ObjectMeta.DeletionTimestamp.IsZero()),
+		v1beta1conditions.WithStepCounter(),
 	)
 
 	return m.patchHelper.Patch(
 		context.TODO(),
 		m.AWSMachine,
-		patch.WithOwnedConditions{Conditions: []clusterv1.ConditionType{
-			clusterv1.ReadyCondition,
+		v1beta1patch.WithOwnedConditions{Conditions: []clusterv1beta1.ConditionType{
+			clusterv1beta1.ReadyCondition,
 			infrav1.InstanceReadyCondition,
 			infrav1.SecurityGroupsReadyCondition,
 			infrav1.ELBAttachedCondition,
@@ -357,14 +370,37 @@ func (m *MachineScope) InstanceIsInKnownState() bool {
 	return state != nil && infrav1.InstanceKnownStates.Has(string(*state))
 }
 
-// AWSMachineIsDeleted checks if the machine was deleted.
+// AWSMachineIsDeleted checks if the AWS machine was deleted.
 func (m *MachineScope) AWSMachineIsDeleted() bool {
 	return !m.AWSMachine.ObjectMeta.DeletionTimestamp.IsZero()
+}
+
+// MachineIsDeleted checks if the machine was deleted.
+func (m *MachineScope) MachineIsDeleted() bool {
+	return !m.Machine.ObjectMeta.DeletionTimestamp.IsZero()
 }
 
 // IsEKSManaged checks if the machine is EKS managed.
 func (m *MachineScope) IsEKSManaged() bool {
 	return m.InfraCluster.InfraCluster().GetObjectKind().GroupVersionKind().Kind == ekscontrolplanev1.AWSManagedControlPlaneKind
+}
+
+// IsControlPlaneExternallyManaged checks if the control plane is externally managed.
+//
+// This is determined by the kind of the control plane object (EKS for example),
+// or if the control plane referenced object is reporting as externally managed.
+func (m *MachineScope) IsControlPlaneExternallyManaged() bool {
+	if m.IsEKSManaged() {
+		return true
+	}
+
+	// Check if the control plane is externally managed.
+	u, err := m.InfraCluster.UnstructuredControlPlane()
+	if err != nil {
+		m.Error(err, "failed to get unstructured control plane")
+		return false
+	}
+	return util.IsExternalManagedControlPlane(u)
 }
 
 // IsExternallyManaged checks if the machine is externally managed.
@@ -377,4 +413,12 @@ func (m *MachineScope) SetInterruptible() {
 	if m.AWSMachine.Spec.SpotMarketOptions != nil {
 		m.AWSMachine.Status.Interruptible = true
 	}
+}
+
+// GetElasticIPPool returns the Elastic IP Pool for an machine, when exists.
+func (m *MachineScope) GetElasticIPPool() *infrav1.ElasticIPPool {
+	if m.AWSMachine == nil {
+		return nil
+	}
+	return m.AWSMachine.Spec.ElasticIPPool
 }
