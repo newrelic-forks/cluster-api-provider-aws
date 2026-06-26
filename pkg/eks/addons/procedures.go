@@ -21,9 +21,11 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/eks"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/eks"
+	ekstypes "github.com/aws/aws-sdk-go-v2/service/eks/types"
 
+	"sigs.k8s.io/cluster-api-provider-aws/v2/pkg/cloud/converters"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/pkg/cloud/services/wait"
 )
 
@@ -38,8 +40,9 @@ var (
 
 // DeleteAddonProcedure is a procedure that will delete an EKS addon.
 type DeleteAddonProcedure struct {
-	plan *plan
-	name string
+	plan     *plan
+	name     string
+	preserve bool
 }
 
 // Do implements the logic for the procedure.
@@ -47,9 +50,10 @@ func (p *DeleteAddonProcedure) Do(ctx context.Context) error {
 	input := &eks.DeleteAddonInput{
 		AddonName:   aws.String(p.name),
 		ClusterName: aws.String(p.plan.clusterName),
+		Preserve:    p.preserve,
 	}
 
-	if _, err := p.plan.eksClient.DeleteAddon(input); err != nil {
+	if _, err := p.plan.eksClient.DeleteAddon(ctx, input); err != nil {
 		return fmt.Errorf("deleting eks addon %s: %w", p.name, err)
 	}
 
@@ -79,11 +83,12 @@ func (p *UpdateAddonProcedure) Do(ctx context.Context) error {
 		AddonName:             desired.Name,
 		AddonVersion:          desired.Version,
 		ClusterName:           &p.plan.clusterName,
-		ResolveConflicts:      desired.ResolveConflict,
+		ConfigurationValues:   desired.Configuration,
+		ResolveConflicts:      converters.AddonConflictResolutionToSDK(desired.ResolveConflict),
 		ServiceAccountRoleArn: desired.ServiceAccountRoleARN,
 	}
 
-	if _, err := p.plan.eksClient.UpdateAddon(input); err != nil {
+	if _, err := p.plan.eksClient.UpdateAddon(ctx, input); err != nil {
 		return fmt.Errorf("updating eks addon %s: %w", p.name, err)
 	}
 
@@ -115,10 +120,10 @@ func (p *UpdateAddonTagsProcedure) Do(ctx context.Context) error {
 
 	input := &eks.TagResourceInput{
 		ResourceArn: installed.ARN,
-		Tags:        convertTags(desired.Tags),
+		Tags:        desired.Tags,
 	}
 
-	if _, err := p.plan.eksClient.TagResource(input); err != nil {
+	if _, err := p.plan.eksClient.TagResource(ctx, input); err != nil {
 		return fmt.Errorf("updating eks addon tags %s: %w", p.name, err)
 	}
 
@@ -147,12 +152,13 @@ func (p *CreateAddonProcedure) Do(ctx context.Context) error {
 		AddonName:             desired.Name,
 		AddonVersion:          desired.Version,
 		ClusterName:           &p.plan.clusterName,
+		ConfigurationValues:   desired.Configuration,
 		ServiceAccountRoleArn: desired.ServiceAccountRoleARN,
-		ResolveConflicts:      desired.ResolveConflict,
-		Tags:                  convertTags(desired.Tags),
+		ResolveConflicts:      converters.AddonConflictResolutionToSDK(desired.ResolveConflict),
+		Tags:                  desired.Tags,
 	}
 
-	output, err := p.plan.eksClient.CreateAddon(input)
+	output, err := p.plan.eksClient.CreateAddon(ctx, input)
 	if err != nil {
 		return fmt.Errorf("creating eks addon %s: %w", p.name, err)
 	}
@@ -186,16 +192,16 @@ func (p *WaitAddonActiveProcedure) Do(ctx context.Context) error {
 	}
 
 	if err := wait.WaitForWithRetryable(wait.NewBackoff(), func() (bool, error) {
-		out, describeErr := p.plan.eksClient.DescribeAddon(input)
+		out, describeErr := p.plan.eksClient.DescribeAddon(ctx, input)
 		if describeErr != nil {
 			return false, describeErr
 		}
 
-		if *out.Addon.Status == eks.AddonStatusActive {
+		if out.Addon.Status == ekstypes.AddonStatusActive {
 			return true, nil
 		}
 
-		if p.includeDegraded && *out.Addon.Status == eks.AddonStatusDegraded {
+		if p.includeDegraded && out.Addon.Status == ekstypes.AddonStatusDegraded {
 			return true, nil
 		}
 
@@ -226,7 +232,7 @@ func (p *WaitAddonDeleteProcedure) Do(ctx context.Context) error {
 		ClusterName: aws.String(p.plan.clusterName),
 	}
 
-	if err := p.plan.eksClient.WaitUntilAddonDeleted(input); err != nil {
+	if err := p.plan.eksClient.WaitUntilAddonDeleted(ctx, input, p.plan.maxWaitActiveUpdateDelete); err != nil {
 		return fmt.Errorf("waiting for addon %s to be deleted: %w", p.name, err)
 	}
 

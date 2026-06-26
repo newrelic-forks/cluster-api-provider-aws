@@ -22,12 +22,13 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/arn"
-	rgapi "github.com/aws/aws-sdk-go/service/resourcegroupstaggingapi"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/aws/arn"
+	rgapi "github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi"
+	rgapitypes "github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi/types"
+	kerrors "k8s.io/apimachinery/pkg/util/errors"
 
 	infrav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
-	expinfrav1 "sigs.k8s.io/cluster-api-provider-aws/v2/exp/api/v1beta2"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/pkg/annotations"
 )
 
@@ -40,16 +41,16 @@ const (
 // does then it will perform garbage collection. For example, it will delete the ELB/NLBs that where created
 // as a result of Services of type load balancer.
 func (s *Service) ReconcileDelete(ctx context.Context) error {
-	s.scope.Info("reconciling deletion for garbage collection")
+	s.scope.Info("reconciling deletion for garbage collection", "cluster", s.scope.InfraClusterName())
 
-	val, found := annotations.Get(s.scope.InfraCluster(), expinfrav1.ExternalResourceGCAnnotation)
+	val, found := annotations.Get(s.scope.InfraCluster(), infrav1.ExternalResourceGCAnnotation)
 	if !found {
 		val = "true"
 	}
 
 	shouldGC, err := strconv.ParseBool(val)
 	if err != nil {
-		return fmt.Errorf("converting value %s of annotation %s to bool: %w", val, expinfrav1.ExternalResourceGCAnnotation, err)
+		return fmt.Errorf("converting value %s of annotation %s to bool: %w", val, infrav1.ExternalResourceGCAnnotation, err)
 	}
 
 	if !shouldGC {
@@ -62,49 +63,83 @@ func (s *Service) ReconcileDelete(ctx context.Context) error {
 }
 
 func (s *Service) deleteResources(ctx context.Context) error {
-	s.scope.Info("deleting aws resources created by tenant cluster")
+	s.scope.Info("deleting aws resources created by tenant cluster", "cluster", s.scope.InfraClusterName())
 
-	serviceTag := infrav1.ClusterAWSCloudProviderTagKey(s.scope.KubernetesClusterName())
-	awsInput := rgapi.GetResourcesInput{
-		ResourceTypeFilters: nil,
-		TagFilters: []*rgapi.TagFilter{
-			{
-				Key:    aws.String(serviceTag),
-				Values: []*string{aws.String(string(infrav1.ResourceLifecycleOwned))},
-			},
-		},
-	}
-
-	awsOutput, err := s.resourceTaggingClient.GetResourcesWithContext(ctx, &awsInput)
+	resources, err := s.collectFuncs.Execute(ctx)
 	if err != nil {
-		return fmt.Errorf("getting tagged resources: %w", err)
+		return fmt.Errorf("collecting resources: %w", err)
 	}
 
-	resources := []*AWSResource{}
+	cleanupFuncs := s.cleanupFuncs
 
-	for i := range awsOutput.ResourceTagMappingList {
-		mapping := awsOutput.ResourceTagMappingList[i]
-		parsedArn, err := arn.Parse(*mapping.ResourceARN)
-		if err != nil {
-			return fmt.Errorf("parsing resource arn %s: %w", *mapping.ResourceARN, err)
+	if val, found := annotations.Get(s.scope.InfraCluster(), infrav1.ExternalResourceGCTasksAnnotation); found {
+		var gcTaskToFunc = map[infrav1.GCTask]ResourceCleanupFunc{
+			infrav1.GCTaskLoadBalancer:  s.deleteLoadBalancers,
+			infrav1.GCTaskTargetGroup:   s.deleteTargetGroups,
+			infrav1.GCTaskSecurityGroup: s.deleteSecurityGroups,
 		}
 
-		tags := map[string]string{}
-		for _, rgTag := range mapping.Tags {
-			tags[*rgTag.Key] = *rgTag.Value
-		}
+		cleanupFuncs = ResourceCleanupFuncs{}
 
-		resources = append(resources, &AWSResource{
-			ARN:  &parsedArn,
-			Tags: tags,
-		})
+		tasks := strings.Split(val, ",")
+
+		for _, task := range tasks {
+			cleanupFuncs = append(cleanupFuncs, gcTaskToFunc[infrav1.GCTask(task)])
+		}
 	}
 
-	if deleteErr := s.cleanupFuncs.Execute(ctx, resources); deleteErr != nil {
+	if deleteErr := cleanupFuncs.Execute(ctx, resources); deleteErr != nil {
 		return fmt.Errorf("deleting resources: %w", deleteErr)
 	}
 
 	return nil
+}
+
+func (s *Service) defaultGetResources(ctx context.Context) ([]*AWSResource, error) {
+	s.scope.Info("get aws resources created by tenant cluster with resource group tagging API", "cluster", s.scope.InfraClusterName())
+
+	serviceTag := infrav1.ClusterAWSCloudProviderTagKey(s.scope.KubernetesClusterName())
+
+	awsInput := rgapi.GetResourcesInput{
+		ResourceTypeFilters: nil,
+		TagFilters: []rgapitypes.TagFilter{
+			{
+				Key:    aws.String(serviceTag),
+				Values: []string{string(infrav1.ResourceLifecycleOwned)},
+			},
+		},
+	}
+
+	resources := []*AWSResource{}
+	var errs []error
+	err := s.resourceTaggingClient.GetResourcesPages(ctx, &awsInput, func(awsOutput *rgapi.GetResourcesOutput) {
+		for i := range awsOutput.ResourceTagMappingList {
+			mapping := awsOutput.ResourceTagMappingList[i]
+			parsedArn, err := arn.Parse(*mapping.ResourceARN)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("parsing resource arn %s: %w", *mapping.ResourceARN, err))
+				continue
+			}
+
+			tags := map[string]string{}
+			for _, rgTag := range mapping.Tags {
+				tags[*rgTag.Key] = *rgTag.Value
+			}
+
+			resources = append(resources, &AWSResource{
+				ARN:  &parsedArn,
+				Tags: tags,
+			})
+		}
+	})
+	if err != nil {
+		return nil, fmt.Errorf("getting tagged resources: %w", err)
+	}
+	if len(errs) > 0 {
+		return nil, fmt.Errorf("getting tagged resources: %w", kerrors.NewAggregate(errs))
+	}
+
+	return resources, nil
 }
 
 func (s *Service) isMatchingResource(resource *AWSResource, serviceName, resourceName string) bool {

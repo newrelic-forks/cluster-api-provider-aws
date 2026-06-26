@@ -159,7 +159,10 @@ metadata:
   name: quick-start
 spec:
   template:
-    spec: { }
+    spec:
+      controlPlaneLoadBalancer:
+        loadBalancerType: nlb
+        healthCheckProtocol: HTTPS
 ---
 kind: KubeadmControlPlaneTemplate
 apiVersion: controlplane.cluster.x-k8s.io/v1beta1
@@ -170,9 +173,6 @@ spec:
     spec:
       kubeadmConfigSpec:
         clusterConfiguration:
-          apiServer:
-            extraArgs:
-              cloud-provider: aws
           controllerManager:
             extraArgs:
               cloud-provider: aws

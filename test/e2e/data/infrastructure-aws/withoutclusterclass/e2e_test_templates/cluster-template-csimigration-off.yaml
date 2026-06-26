@@ -23,9 +23,6 @@ kind: AWSCluster
 metadata:
   name: ${CLUSTER_NAME}
 spec:
-  network:
-    vpc:
-      availabilityZoneUsageLimit: 1
   region: ${AWS_REGION}
   sshKeyName: ${AWS_SSH_KEY_NAME}
 ---
@@ -36,9 +33,6 @@ metadata:
 spec:
   kubeadmConfigSpec:
     clusterConfiguration:
-      apiServer:
-        extraArgs:
-          cloud-provider: aws
       controllerManager:
         extraArgs:
           cloud-provider: aws

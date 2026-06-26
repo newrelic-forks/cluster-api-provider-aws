@@ -18,9 +18,10 @@ package instancestate
 
 import (
 	"context"
+	"fmt"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -50,7 +51,7 @@ func persistObject(g *WithT, o client.Object) {
 	g.Eventually(func() bool {
 		err := k8sClient.Get(ctx, lookupKey, o)
 		return err == nil
-	}, time.Second*10).Should(BeTrue())
+	}, time.Second*10).Should(BeTrue(), fmt.Sprintf("Eventually failed getting the newly created object %v", lookupKey))
 }
 
 func deleteAWSCluster(g *WithT, name string) {

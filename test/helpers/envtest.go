@@ -14,10 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Package helpers provides a set of utilities for testing controllers.
 package helpers
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"go/build"
 	"net"
@@ -30,7 +32,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/v2"
 	"github.com/pkg/errors"
 	admissionv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -46,8 +48,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	logf "sigs.k8s.io/cluster-api/cmd/clusterctl/log"
 	utilyaml "sigs.k8s.io/cluster-api/util/yaml"
 )
@@ -65,6 +69,8 @@ var (
 )
 
 func init() {
+	// reset flags to avoid conflicts if an imported package already called klog.InitFlags()
+	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	klog.InitFlags(nil)
 	// additionally force all the controllers to use the Ginkgo logger.
 	ctrl.SetLogger(klog.Background())
@@ -78,7 +84,7 @@ func init() {
 	utilruntime.Must(clusterv1.AddToScheme(scheme.Scheme))
 
 	// Get the root of the current file to use in CRD paths.
-	_, filename, _, _ := goruntime.Caller(0) //nolint
+	_, filename, _, _ := goruntime.Caller(0) //nolint:dogsled
 	root = path.Join(path.Dir(filename), "..", "..")
 }
 
@@ -184,6 +190,7 @@ func (t *TestEnvironmentConfiguration) Build() (*TestEnvironment, error) {
 		PollInterval:       time.Second,
 		ValidatingWebhooks: validatingWebhooks,
 		MutatingWebhooks:   mutatingWebhooks,
+		LocalServingHost:   "localhost",
 	}
 
 	if _, err := t.env.Start(); err != nil {
@@ -191,14 +198,18 @@ func (t *TestEnvironmentConfiguration) Build() (*TestEnvironment, error) {
 	}
 
 	options := manager.Options{
-		Scheme:             scheme.Scheme,
-		MetricsBindAddress: "0",
-		CertDir:            t.env.WebhookInstallOptions.LocalServingCertDir,
-		Port:               t.env.WebhookInstallOptions.LocalServingPort,
+		Scheme: scheme.Scheme,
+		Metrics: metricsserver.Options{
+			BindAddress: "0",
+		},
+		WebhookServer: webhook.NewServer(webhook.Options{
+			Host:    t.env.WebhookInstallOptions.LocalServingHost,
+			Port:    t.env.WebhookInstallOptions.LocalServingPort,
+			CertDir: t.env.WebhookInstallOptions.LocalServingCertDir,
+		}),
 	}
 
 	mgr, err := ctrl.NewManager(t.env.Config, options)
-
 	if err != nil {
 		klog.Fatalf("Failed to start testenv manager: %v", err)
 	}
@@ -227,7 +238,7 @@ func buildModifiedWebhook(tag string, relativeFilePath string) (admissionv1.Muta
 		if o.GetKind() == mutatingWebhookKind {
 			// update the name in metadata
 			if o.GetName() == defaultMutatingWebhookName {
-				o.SetName(strings.Join([]string{defaultMutatingWebhookName, "-", tag}, ""))
+				o.SetName(defaultMutatingWebhookName + "-" + tag)
 				if err := scheme.Scheme.Convert(&o, &mutatingWebhook, nil); err != nil {
 					klog.Fatalf("failed to convert MutatingWebhookConfiguration %s", o.GetName())
 				}
@@ -236,7 +247,7 @@ func buildModifiedWebhook(tag string, relativeFilePath string) (admissionv1.Muta
 		if o.GetKind() == validatingWebhookKind {
 			// update the name in metadata
 			if o.GetName() == defaultValidatingWebhookName {
-				o.SetName(strings.Join([]string{defaultValidatingWebhookName, "-", tag}, ""))
+				o.SetName(defaultValidatingWebhookName + "-" + tag)
 				if err := scheme.Scheme.Convert(&o, &validatingWebhook, nil); err != nil {
 					klog.Fatalf("failed to convert ValidatingWebhookConfiguration %s", o.GetName())
 				}
@@ -260,7 +271,8 @@ func (t *TestEnvironment) WaitForWebhooks() {
 	timeout := 1 * time.Second
 	for {
 		time.Sleep(1 * time.Second)
-		conn, err := net.DialTimeout("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)), timeout)
+		dialer := &net.Dialer{Timeout: timeout}
+		conn, err := dialer.DialContext(context.Background(), "tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
 		if err != nil {
 			klog.V(2).Infof("Webhook port is not ready, will retry in %v: %s", timeout, err)
 			continue

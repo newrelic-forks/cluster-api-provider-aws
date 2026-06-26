@@ -18,31 +18,32 @@ package scope
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	infrav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	expinfrav1 "sigs.k8s.io/cluster-api-provider-aws/v2/exp/api/v1beta2"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/pkg/logger"
-	expclusterv1 "sigs.k8s.io/cluster-api/exp/api/v1beta1"
-	"sigs.k8s.io/cluster-api/util/conditions"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
+	v1beta1conditions "sigs.k8s.io/cluster-api/util/deprecated/v1beta1/conditions"
 )
 
 // LaunchTemplateScope defines a scope defined around a launch template.
 type LaunchTemplateScope interface {
-	GetMachinePool() *expclusterv1.MachinePool
+	GetMachinePool() *clusterv1.MachinePool
 	GetLaunchTemplate() *expinfrav1.AWSLaunchTemplate
 	LaunchTemplateName() string
 	GetLaunchTemplateIDStatus() string
 	SetLaunchTemplateIDStatus(id string)
 	GetLaunchTemplateLatestVersionStatus() string
 	SetLaunchTemplateLatestVersionStatus(version string)
-	GetRawBootstrapData() ([]byte, error)
+	GetRawBootstrapData() ([]byte, string, *types.NamespacedName, error)
 
 	IsEKSManaged() bool
 	AdditionalTags() infrav1.Tags
 
 	GetObjectMeta() *metav1.ObjectMeta
-	GetSetter() conditions.Setter
+	GetSetter() v1beta1conditions.Setter
 	PatchObject() error
 	GetEC2Scope() EC2Scope
 
@@ -50,11 +51,13 @@ type LaunchTemplateScope interface {
 	logger.Wrapper
 }
 
+// ResourceServiceToUpdate is a struct that contains the resource ID and the resource service to update.
 type ResourceServiceToUpdate struct {
 	ResourceID      *string
 	ResourceService ResourceService
 }
 
+// ResourceService defines the interface for resources.
 type ResourceService interface {
 	UpdateResourceTags(resourceID *string, create, remove map[string]string) error
 }

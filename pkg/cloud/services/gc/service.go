@@ -14,40 +14,47 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Package gc provides a way to perform gc operations against a tenant/workload/child cluster.
 package gc
 
 import (
 	"context"
 
-	"github.com/aws/aws-sdk-go/aws/arn"
-	"github.com/aws/aws-sdk-go/service/ec2/ec2iface"
-	"github.com/aws/aws-sdk-go/service/elb/elbiface"
-	"github.com/aws/aws-sdk-go/service/elbv2/elbv2iface"
-	"github.com/aws/aws-sdk-go/service/resourcegroupstaggingapi/resourcegroupstaggingapiiface"
+	"github.com/aws/aws-sdk-go-v2/aws/arn"
 
 	"sigs.k8s.io/cluster-api-provider-aws/v2/pkg/cloud"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/pkg/cloud/scope"
+	"sigs.k8s.io/cluster-api-provider-aws/v2/pkg/cloud/services/common"
+	"sigs.k8s.io/cluster-api-provider-aws/v2/pkg/cloud/services/elb"
 )
 
 // Service is used to perform operations against a tenant/workload/child cluster.
 type Service struct {
 	scope                 cloud.ClusterScoper
-	elbClient             elbiface.ELBAPI
-	elbv2Client           elbv2iface.ELBV2API
-	resourceTaggingClient resourcegroupstaggingapiiface.ResourceGroupsTaggingAPIAPI
-	ec2Client             ec2iface.EC2API
+	elbClient             elb.ELBAPI
+	elbv2Client           elb.ELBV2API
+	resourceTaggingClient elb.ResourceGroupsTaggingAPIAPI
+	ec2Client             common.EC2API
 	cleanupFuncs          ResourceCleanupFuncs
+	collectFuncs          ResourceCollectFuncs
 }
 
 // NewService creates a new Service.
 func NewService(clusterScope cloud.ClusterScoper, opts ...ServiceOption) *Service {
 	svc := &Service{
-		scope:                 clusterScope,
-		elbClient:             scope.NewELBClient(clusterScope, clusterScope, clusterScope, clusterScope.InfraCluster()),
-		elbv2Client:           scope.NewELBv2Client(clusterScope, clusterScope, clusterScope, clusterScope.InfraCluster()),
-		resourceTaggingClient: scope.NewResourgeTaggingClient(clusterScope, clusterScope, clusterScope, clusterScope.InfraCluster()),
-		ec2Client:             scope.NewEC2Client(clusterScope, clusterScope, clusterScope, clusterScope.InfraCluster()),
-		cleanupFuncs:          ResourceCleanupFuncs{},
+		scope: clusterScope,
+		elbClient: &elb.ELBClient{
+			Client: scope.NewELBClient(clusterScope, clusterScope, clusterScope, clusterScope.InfraCluster()),
+		},
+		elbv2Client: &elb.ELBV2Client{
+			Client: scope.NewELBv2Client(clusterScope, clusterScope, clusterScope, clusterScope.InfraCluster()),
+		},
+		resourceTaggingClient: &elb.ResourceGroupsTaggingAPIClient{
+			Client: scope.NewResourgeTaggingClient(clusterScope, clusterScope, clusterScope, clusterScope.InfraCluster()),
+		},
+		cleanupFuncs: ResourceCleanupFuncs{},
+		collectFuncs: ResourceCollectFuncs{},
+		ec2Client:    scope.NewEC2Client(clusterScope, clusterScope, clusterScope, clusterScope.InfraCluster()),
 	}
 	addDefaultCleanupFuncs(svc)
 
@@ -66,6 +73,21 @@ func addDefaultCleanupFuncs(s *Service) {
 	}
 }
 
+func addDefaultCollectFuncs(s *Service) {
+	s.collectFuncs = []ResourceCollectFunc{
+		s.defaultGetResources,
+	}
+}
+
+func addAlternativeCollectFuncs(s *Service) {
+	s.collectFuncs = []ResourceCollectFunc{
+		s.getProviderOwnedLoadBalancers,
+		s.getProviderOwnedLoadBalancersV2,
+		s.getProviderOwnedTargetgroups,
+		s.getProviderOwnedSecurityGroups,
+	}
+}
+
 // AWSResource represents a resource in AWS.
 type AWSResource struct {
 	ARN  *arn.ARN
@@ -79,12 +101,33 @@ type ResourceCleanupFunc func(ctx context.Context, resources []*AWSResource) err
 type ResourceCleanupFuncs []ResourceCleanupFunc
 
 // Execute will execute all the defined clean up functions against the aws resources.
-func (fn *ResourceCleanupFuncs) Execute(ctx context.Context, resources []*AWSResource) error {
-	for _, f := range *fn {
+func (fn ResourceCleanupFuncs) Execute(ctx context.Context, resources []*AWSResource) error {
+	for _, f := range fn {
 		if err := f(ctx, resources); err != nil {
 			return err
 		}
 	}
 
 	return nil
+}
+
+// ResourceCollectFunc is a function type to collect resources for a specific AWS service type.
+type ResourceCollectFunc func(ctx context.Context) ([]*AWSResource, error)
+
+// ResourceCollectFuncs is a collection of ResourceCollectFunc.
+type ResourceCollectFuncs []ResourceCollectFunc
+
+// Execute will execute all the defined collect functions against the aws resources.
+func (fn ResourceCollectFuncs) Execute(ctx context.Context) ([]*AWSResource, error) {
+	var resources []*AWSResource
+	for _, f := range fn {
+		rs, err := f(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		resources = append(resources, rs...)
+	}
+
+	return resources, nil
 }

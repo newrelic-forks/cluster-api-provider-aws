@@ -21,8 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	infrav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
-	"sigs.k8s.io/cluster-api/errors"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 )
 
 // Constants block.
@@ -117,7 +116,7 @@ type AWSMachinePoolStatus struct {
 
 	// Conditions defines current service state of the AWSMachinePool.
 	// +optional
-	Conditions clusterv1.Conditions `json:"conditions,omitempty"`
+	Conditions clusterv1beta1.Conditions `json:"conditions,omitempty"`
 
 	// Instances contains the status for each instance in the pool
 	// +optional
@@ -147,7 +146,7 @@ type AWSMachinePoolStatus struct {
 	// can be added as events to the Machine object and/or logged in the
 	// controller's output.
 	// +optional
-	FailureReason *errors.MachineStatusError `json:"failureReason,omitempty"`
+	FailureReason *string `json:"failureReason,omitempty"`
 
 	// FailureMessage will be set in the event that there is a terminal problem
 	// reconciling the Machine and will contain a more verbose string suitable
@@ -183,6 +182,7 @@ type AWSMachinePoolInstanceStatus struct {
 }
 
 // +kubebuilder:object:root=true
+// +kubebuilder:unservedversion
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:path=awsmachinepools,scope=Namespaced,categories=cluster-api,shortName=awsmp
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.ready",description="Machine ready status"
@@ -201,6 +201,7 @@ type AWSMachinePool struct {
 }
 
 // +kubebuilder:object:root=true
+// +kubebuilder:unservedversion
 
 // AWSMachinePoolList contains a list of AWSMachinePool.
 type AWSMachinePoolList struct {
@@ -214,12 +215,12 @@ func init() {
 }
 
 // GetConditions returns the observations of the operational state of the AWSMachinePool resource.
-func (r *AWSMachinePool) GetConditions() clusterv1.Conditions {
+func (r *AWSMachinePool) GetConditions() clusterv1beta1.Conditions {
 	return r.Status.Conditions
 }
 
-// SetConditions sets the underlying service state of the AWSMachinePool to the predescribed clusterv1.Conditions.
-func (r *AWSMachinePool) SetConditions(conditions clusterv1.Conditions) {
+// SetConditions sets the underlying service state of the AWSMachinePool to the predescribed clusterv1beta1.Conditions.
+func (r *AWSMachinePool) SetConditions(conditions clusterv1beta1.Conditions) {
 	r.Status.Conditions = conditions
 }
 

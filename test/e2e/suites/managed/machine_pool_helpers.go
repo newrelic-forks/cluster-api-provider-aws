@@ -21,35 +21,36 @@ package managed
 
 import (
 	"context"
+	"fmt"
 
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"sigs.k8s.io/cluster-api-provider-aws/v2/test/e2e/shared"
-	expclusterv1 "sigs.k8s.io/cluster-api/exp/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/cluster-api/test/framework"
 )
 
 type deleteMachinePoolInput struct {
-	MachinePool *expclusterv1.MachinePool
+	MachinePool *clusterv1.MachinePool
 	Deleter     framework.Deleter
 }
 
 func deleteMachinePool(ctx context.Context, input deleteMachinePoolInput) {
-	shared.Byf("Deleting machine pool %s", input.MachinePool.Name)
+	By(fmt.Sprintf("Deleting machine pool %s", input.MachinePool.Name))
 	Expect(input.Deleter.Delete(ctx, input.MachinePool)).To(Succeed())
 }
 
 type waitForMachinePoolDeletedInput struct {
-	MachinePool *expclusterv1.MachinePool
+	MachinePool *clusterv1.MachinePool
 	Getter      framework.Getter
 }
 
 func waitForMachinePoolDeleted(ctx context.Context, input waitForMachinePoolDeletedInput, intervals ...interface{}) {
-	shared.Byf("Waiting for machine pool %s to be deleted", input.MachinePool.GetName())
+	By(fmt.Sprintf("Waiting for machine pool %s to be deleted", input.MachinePool.GetName()))
 	Eventually(func() bool {
-		mp := &expclusterv1.MachinePool{}
+		mp := &clusterv1.MachinePool{}
 		key := client.ObjectKey{
 			Namespace: input.MachinePool.GetNamespace(),
 			Name:      input.MachinePool.GetName(),
@@ -57,5 +58,5 @@ func waitForMachinePoolDeleted(ctx context.Context, input waitForMachinePoolDele
 		err := input.Getter.Get(ctx, key, mp)
 		notFound := apierrors.IsNotFound(err)
 		return notFound
-	}, intervals...).Should(BeTrue())
+	}, intervals...).Should(BeTrue(), fmt.Sprintf("Eventually failed waiting for machine pool %q to be deleted", input.MachinePool.GetName()))
 }

@@ -262,35 +262,9 @@ spec:
             valueFrom:
               template: |
                 - id: "{{ .publicSubnetID }}"
+                  availabilityZone: "{{ .fdForBYOSubnets }}"
                 - id: "{{ .privateSubnetID }}"
-  - name: awsMachineTemplateControlPlaneForBYO
-    enabledIf: '{{ eq .byoInfra "true" }}'
-    definitions:
-      - selector:
-          apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
-          kind: AWSMachineTemplate
-          matchResources:
-            controlPlane: true
-        jsonPatches:
-          - op: add
-            path: "/spec/template/spec/failureDomain"
-            valueFrom:
-              variable: fdForBYOSubnets
-  - name: awsMachineTemplateWorkerForBYO
-    enabledIf: '{{ eq .byoInfra "true" }}'
-    definitions:
-      - selector:
-          apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
-          kind: AWSMachineTemplate
-          matchResources:
-            machineDeploymentClass:
-              names:
-                - default-worker
-        jsonPatches:
-          - op: add
-            path: "/spec/template/spec/failureDomain"
-            valueFrom:
-              variable: fdForBYOSubnets
+                  availabilityZone: "{{ .fdForBYOSubnets }}"
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
 kind: AWSClusterTemplate
@@ -298,7 +272,10 @@ metadata:
   name: ci-default
 spec:
   template:
-    spec: {}
+    spec:
+      controlPlaneLoadBalancer:
+        loadBalancerType: nlb
+        healthCheckProtocol: HTTPS
 ---
 kind: KubeadmControlPlaneTemplate
 apiVersion: controlplane.cluster.x-k8s.io/v1beta1
@@ -309,22 +286,19 @@ spec:
     spec:
       kubeadmConfigSpec:
         clusterConfiguration:
-          apiServer:
-            extraArgs:
-              cloud-provider: aws
           controllerManager:
             extraArgs:
-              cloud-provider: aws
+              cloud-provider: external
         initConfiguration:
           nodeRegistration:
             name: '{{ ds.meta_data.local_hostname }}'
             kubeletExtraArgs:
-              cloud-provider: aws
+              cloud-provider: external
         joinConfiguration:
           nodeRegistration:
             name: '{{ ds.meta_data.local_hostname }}'
             kubeletExtraArgs:
-              cloud-provider: aws
+              cloud-provider: external
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
 kind: AWSMachineTemplate
@@ -337,6 +311,8 @@ spec:
       instanceType: REPLACEME
       iamInstanceProfile: "control-plane.cluster-api-provider-aws.sigs.k8s.io"
       cloudInit: {}
+      rootVolume:
+        size: 10
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
 kind: AWSMachineTemplate
@@ -349,6 +325,8 @@ spec:
       instanceType: REPLACEME
       iamInstanceProfile: "nodes.cluster-api-provider-aws.sigs.k8s.io"
       cloudInit: {}
+      rootVolume:
+        size: 10
 ---
 apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
 kind: KubeadmConfigTemplate
@@ -361,4 +339,4 @@ spec:
         nodeRegistration:
           name: '{{ ds.meta_data.local_hostname }}'
           kubeletExtraArgs:
-            cloud-provider: aws
+            cloud-provider: external

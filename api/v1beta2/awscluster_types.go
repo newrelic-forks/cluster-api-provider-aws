@@ -19,7 +19,7 @@ package v1beta2
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 )
 
 const (
@@ -39,13 +39,17 @@ type AWSClusterSpec struct {
 	// The AWS Region the cluster lives in.
 	Region string `json:"region,omitempty"`
 
+	// Partition is the AWS security partition being used. Defaults to "aws"
+	// +optional
+	Partition string `json:"partition,omitempty"`
+
 	// SSHKeyName is the name of the ssh key to attach to the bastion host. Valid values are empty string (do not use SSH keys), a valid SSH key name, or omitted (use the default SSH key name)
 	// +optional
 	SSHKeyName *string `json:"sshKeyName,omitempty"`
 
 	// ControlPlaneEndpoint represents the endpoint used to communicate with the control plane.
 	// +optional
-	ControlPlaneEndpoint clusterv1.APIEndpoint `json:"controlPlaneEndpoint"`
+	ControlPlaneEndpoint clusterv1beta1.APIEndpoint `json:"controlPlaneEndpoint"`
 
 	// AdditionalTags is an optional set of tags to add to AWS resources managed by the AWS provider, in addition to the
 	// ones added by default.
@@ -55,6 +59,14 @@ type AWSClusterSpec struct {
 	// ControlPlaneLoadBalancer is optional configuration for customizing control plane behavior.
 	// +optional
 	ControlPlaneLoadBalancer *AWSLoadBalancerSpec `json:"controlPlaneLoadBalancer,omitempty"`
+
+	// SecondaryControlPlaneLoadBalancer is an additional load balancer that can be used for the control plane.
+	//
+	// An example use case is to have a separate internal load balancer for internal traffic,
+	// and a separate external load balancer for external traffic.
+	//
+	// +optional
+	SecondaryControlPlaneLoadBalancer *AWSLoadBalancerSpec `json:"secondaryControlPlaneLoadBalancer,omitempty"`
 
 	// ImageLookupFormat is the AMI naming format to look up machine images when
 	// a machine does not specify an AMI. When set, this will be used for all
@@ -87,8 +99,10 @@ type AWSClusterSpec struct {
 	// +optional
 	Bastion Bastion `json:"bastion"`
 
-	// IdentityRef is a reference to a identity to be used when reconciling this cluster
 	// +optional
+
+	// IdentityRef is a reference to an identity to be used when reconciling the managed control plane.
+	// If no identity is specified, the default identity for this controller will be used.
 	IdentityRef *AWSIdentityReference `json:"identityRef,omitempty"`
 
 	// S3Bucket contains options to configure a supporting S3 bucket for this
@@ -138,8 +152,9 @@ type Bastion struct {
 
 	// AllowedCIDRBlocks is a list of CIDR blocks allowed to access the bastion host.
 	// They are set as ingress rules for the Bastion host's Security Group (defaults to 0.0.0.0/0).
+	// If the cluster has IPv6 enabled, defaults to ::/0 and 0.0.0.0/0.
 	// +optional
-	AllowedCIDRBlocks []string `json:"allowedCIDRBlocks,omitempty"`
+	AllowedCIDRBlocks CidrBlocks `json:"allowedCIDRBlocks,omitempty"`
 
 	// InstanceType will use the specified instance type for the bastion. If not specified,
 	// Cluster API Provider AWS will use t3.micro for all regions except us-east-1, where t2.micro
@@ -151,6 +166,22 @@ type Bastion struct {
 	// +optional
 	AMI string `json:"ami,omitempty"`
 }
+
+// LoadBalancerType defines the type of load balancer to use.
+type LoadBalancerType string
+
+var (
+	// LoadBalancerTypeClassic is the classic ELB type.
+	LoadBalancerTypeClassic = LoadBalancerType("classic")
+	// LoadBalancerTypeELB is the ELB type.
+	LoadBalancerTypeELB = LoadBalancerType("elb")
+	// LoadBalancerTypeALB is the ALB type.
+	LoadBalancerTypeALB = LoadBalancerType("alb")
+	// LoadBalancerTypeNLB is the NLB type.
+	LoadBalancerTypeNLB = LoadBalancerType("nlb")
+	// LoadBalancerTypeDisabled disables the load balancer.
+	LoadBalancerTypeDisabled = LoadBalancerType("disabled")
+)
 
 // AWSLoadBalancerSpec defines the desired state of an AWS load balancer.
 type AWSLoadBalancerSpec struct {
@@ -167,7 +198,7 @@ type AWSLoadBalancerSpec struct {
 	// +kubebuilder:default=internet-facing
 	// +kubebuilder:validation:Enum=internet-facing;internal
 	// +optional
-	Scheme *ClassicELBScheme `json:"scheme,omitempty"`
+	Scheme *ELBScheme `json:"scheme,omitempty"`
 
 	// CrossZoneLoadBalancing enables the classic ELB cross availability zone balancing.
 	//
@@ -184,41 +215,122 @@ type AWSLoadBalancerSpec struct {
 	// +optional
 	Subnets []string `json:"subnets,omitempty"`
 
-	// HealthCheckProtocol sets the protocol type for classic ELB health check target
-	// default value is ClassicELBProtocolSSL
+	// HealthCheckProtocol sets the protocol type for ELB health check target
+	// default value is ELBProtocolSSL
+	// +kubebuilder:validation:Enum=TCP;SSL;HTTP;HTTPS;TLS;UDP
 	// +optional
-	HealthCheckProtocol *ClassicELBProtocol `json:"healthCheckProtocol,omitempty"`
+	HealthCheckProtocol *ELBProtocol `json:"healthCheckProtocol,omitempty"`
+
+	// HealthCheck sets custom health check configuration to the API target group.
+	// +optional
+	HealthCheck *TargetGroupHealthCheckAPISpec `json:"healthCheck,omitempty"`
 
 	// AdditionalSecurityGroups sets the security groups used by the load balancer. Expected to be security group IDs
 	// This is optional - if not provided new security groups will be created for the load balancer
 	// +optional
 	AdditionalSecurityGroups []string `json:"additionalSecurityGroups,omitempty"`
+
+	// AdditionalListeners sets the additional listeners for the control plane load balancer.
+	// This is only applicable to Network Load Balancer (NLB) types for the time being.
+	// +listType=map
+	// +listMapKey=port
+	// +optional
+	AdditionalListeners []AdditionalListenerSpec `json:"additionalListeners,omitempty"`
+
+	// IngressRules sets the ingress rules for the control plane load balancer.
+	// +optional
+	IngressRules []IngressRule `json:"ingressRules,omitempty"`
+
+	// LoadBalancerType sets the type for a load balancer. The default type is classic.
+	// +kubebuilder:default=classic
+	// +kubebuilder:validation:Enum:=classic;elb;alb;nlb;disabled
+	LoadBalancerType LoadBalancerType `json:"loadBalancerType,omitempty"`
+
+	// DisableHostsRewrite disabled the hair pinning issue solution that adds the NLB's address as 127.0.0.1 to the hosts
+	// file of each instance. This is by default, false.
+	DisableHostsRewrite bool `json:"disableHostsRewrite,omitempty"`
+
+	// PreserveClientIP lets the user control if preservation of client ips must be retained or not.
+	// If this is enabled 6443 will be opened to 0.0.0.0/0.
+	PreserveClientIP bool `json:"preserveClientIP,omitempty"`
+
+	// TargetGroupIPType sets the IP address type for the target group.
+	// Valid values are ipv4 and ipv6. If not specified, defaults to ipv4 unless
+	// the VPC has IPv6 enabled, in which case it defaults to ipv6.
+	// This applies to the API server target group.
+	// This field cannot be set if LoadBalancerType is classic or disabled.
+	// +kubebuilder:validation:Enum=ipv4;ipv6
+	// +optional
+	TargetGroupIPType *TargetGroupIPType `json:"targetGroupIPType,omitempty"`
+}
+
+// AdditionalListenerSpec defines the desired state of an
+// additional listener on an AWS load balancer.
+type AdditionalListenerSpec struct {
+	// Port sets the port for the additional listener.
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=65535
+	Port int64 `json:"port"`
+
+	// Protocol sets the protocol for the additional listener.
+	// Currently only TCP is supported.
+	// +kubebuilder:validation:Enum=TCP
+	// +kubebuilder:default=TCP
+	Protocol ELBProtocol `json:"protocol,omitempty"`
+
+	// HealthCheck sets the optional custom health check configuration to the API target group.
+	// +optional
+	HealthCheck *TargetGroupHealthCheckAdditionalSpec `json:"healthCheck,omitempty"`
+
+	// TargetGroupIPType sets the IP address type for the target group.
+	// Valid values are ipv4 and ipv6. If not specified, defaults to ipv4 unless
+	// the VPC has IPv6 enabled, in which case it defaults to ipv6.
+	// This field cannot be set if LoadBalancerType is classic or disabled.
+	// +kubebuilder:validation:Enum=ipv4;ipv6
+	// +optional
+	TargetGroupIPType *TargetGroupIPType `json:"targetGroupIPType,omitempty"`
 }
 
 // AWSClusterStatus defines the observed state of AWSCluster.
 type AWSClusterStatus struct {
 	// +kubebuilder:default=false
-	Ready          bool                     `json:"ready"`
-	Network        NetworkStatus            `json:"networkStatus,omitempty"`
-	FailureDomains clusterv1.FailureDomains `json:"failureDomains,omitempty"`
-	Bastion        *Instance                `json:"bastion,omitempty"`
-	Conditions     clusterv1.Conditions     `json:"conditions,omitempty"`
+	Ready          bool                          `json:"ready"`
+	Network        NetworkStatus                 `json:"networkStatus,omitempty"`
+	FailureDomains clusterv1beta1.FailureDomains `json:"failureDomains,omitempty"`
+	Bastion        *Instance                     `json:"bastion,omitempty"`
+	Conditions     clusterv1beta1.Conditions     `json:"conditions,omitempty"`
 }
 
+// S3Bucket defines a supporting S3 bucket for the cluster, currently can be optionally used for Ignition.
 type S3Bucket struct {
 	// ControlPlaneIAMInstanceProfile is a name of the IAMInstanceProfile, which will be allowed
 	// to read control-plane node bootstrap data from S3 Bucket.
-	ControlPlaneIAMInstanceProfile string `json:"controlPlaneIAMInstanceProfile"`
+	// +optional
+	ControlPlaneIAMInstanceProfile string `json:"controlPlaneIAMInstanceProfile,omitempty"`
 
 	// NodesIAMInstanceProfiles is a list of IAM instance profiles, which will be allowed to read
 	// worker nodes bootstrap data from S3 Bucket.
-	NodesIAMInstanceProfiles []string `json:"nodesIAMInstanceProfiles"`
+	// +optional
+	NodesIAMInstanceProfiles []string `json:"nodesIAMInstanceProfiles,omitempty"`
+
+	// PresignedURLDuration defines the duration for which presigned URLs are valid.
+	//
+	// This is used to generate presigned URLs for S3 Bucket objects, which are used by
+	// control-plane and worker nodes to fetch bootstrap data.
+	//
+	// When enabled, the IAM instance profiles specified are not used.
+	// +optional
+	PresignedURLDuration *metav1.Duration `json:"presignedURLDuration,omitempty"`
 
 	// Name defines name of S3 Bucket to be created.
 	// +kubebuilder:validation:MinLength:=3
 	// +kubebuilder:validation:MaxLength:=63
 	// +kubebuilder:validation:Pattern=`^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$`
 	Name string `json:"name"`
+
+	// BestEffortDeleteObjects defines whether access/permission errors during object deletion should be ignored.
+	// +optional
+	BestEffortDeleteObjects *bool `json:"bestEffortDeleteObjects,omitempty"`
 }
 
 // +kubebuilder:object:root=true
@@ -229,7 +341,8 @@ type S3Bucket struct {
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.ready",description="Cluster infrastructure is ready for EC2 instances"
 // +kubebuilder:printcolumn:name="VPC",type="string",JSONPath=".spec.network.vpc.id",description="AWS VPC the cluster is using"
 // +kubebuilder:printcolumn:name="Endpoint",type="string",JSONPath=".spec.controlPlaneEndpoint",description="API Endpoint",priority=1
-// +kubebuilder:printcolumn:name="Bastion IP",type="string",JSONPath=".status.bastion.publicIp",description="Bastion IP address for breakglass access"
+// +kubebuilder:printcolumn:name="Bastion IP",type="string",JSONPath=".status.bastion.publicIp",description="Bastion IPv4 address for breakglass access"
+// +kubebuilder:printcolumn:name="Bastion IPv6",type="string",JSONPath=".status.bastion.ipv6Address",description="Bastion IPv6 address for breakglass access"
 // +k8s:defaulter-gen=true
 
 // AWSCluster is the schema for Amazon EC2 based Kubernetes Cluster API.
@@ -252,12 +365,12 @@ type AWSClusterList struct {
 }
 
 // GetConditions returns the observations of the operational state of the AWSCluster resource.
-func (r *AWSCluster) GetConditions() clusterv1.Conditions {
+func (r *AWSCluster) GetConditions() clusterv1beta1.Conditions {
 	return r.Status.Conditions
 }
 
-// SetConditions sets the underlying service state of the AWSCluster to the predescribed clusterv1.Conditions.
-func (r *AWSCluster) SetConditions(conditions clusterv1.Conditions) {
+// SetConditions sets the underlying service state of the AWSCluster to the predescribed clusterv1beta1.Conditions.
+func (r *AWSCluster) SetConditions(conditions clusterv1beta1.Conditions) {
 	r.Status.Conditions = conditions
 }
 

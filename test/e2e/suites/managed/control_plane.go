@@ -21,15 +21,15 @@ package managed
 
 import (
 	"context"
+	"fmt"
 
-	"github.com/aws/aws-sdk-go/aws/client"
-	"github.com/onsi/ginkgo"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	crclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	ekscontrolplanev1 "sigs.k8s.io/cluster-api-provider-aws/v2/controlplane/eks/api/v1beta2"
-	"sigs.k8s.io/cluster-api-provider-aws/v2/test/e2e/shared"
 	"sigs.k8s.io/cluster-api/test/framework"
 	"sigs.k8s.io/cluster-api/test/framework/clusterctl"
 	"sigs.k8s.io/cluster-api/util/patch"
@@ -38,7 +38,7 @@ import (
 // UpgradeControlPlaneVersionSpecInput is the input type for UpgradeControlPlaneVersionSpec.
 type UpgradeControlPlaneVersionSpecInput struct {
 	E2EConfig             *clusterctl.E2EConfig
-	AWSSession            client.ConfigProvider
+	AWSSession            *aws.Config
 	BootstrapClusterProxy framework.ClusterProxy
 	ClusterName           string
 	Namespace             *corev1.Namespace
@@ -58,19 +58,19 @@ func UpgradeControlPlaneVersionSpec(ctx context.Context, inputGetter func() Upgr
 	mgmtClient := input.BootstrapClusterProxy.GetClient()
 	controlPlaneName := getControlPlaneName(input.ClusterName)
 
-	shared.Byf("Getting control plane: %s", controlPlaneName)
+	ginkgo.By(fmt.Sprintf("Getting control plane: %s", controlPlaneName))
 	controlPlane := &ekscontrolplanev1.AWSManagedControlPlane{}
 	err := mgmtClient.Get(ctx, crclient.ObjectKey{Namespace: input.Namespace.Name, Name: controlPlaneName}, controlPlane)
 	Expect(err).ToNot(HaveOccurred())
 
-	shared.Byf("Patching control plane %s from %s to %s", controlPlaneName, *controlPlane.Spec.Version, input.UpgradeVersion)
+	ginkgo.By(fmt.Sprintf("Patching control plane %s from %s to %s", controlPlaneName, *controlPlane.Spec.Version, input.UpgradeVersion))
 	patchHelper, err := patch.NewHelper(controlPlane, mgmtClient)
 	Expect(err).ToNot(HaveOccurred())
 	controlPlane.Spec.Version = &input.UpgradeVersion
 	Expect(patchHelper.Patch(ctx, controlPlane)).To(Succeed())
 
 	ginkgo.By("Waiting for EKS control-plane to be upgraded to new version")
-	waitForControlPlaneToBeUpgraded(waitForControlPlaneToBeUpgradedInput{
+	waitForControlPlaneToBeUpgraded(ctx, waitForControlPlaneToBeUpgradedInput{
 		ControlPlane:   controlPlane,
 		AWSSession:     input.AWSSession,
 		UpgradeVersion: input.UpgradeVersion,

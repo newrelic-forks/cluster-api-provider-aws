@@ -23,7 +23,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 
@@ -36,12 +36,11 @@ import (
 // General EKS e2e test.
 var _ = ginkgo.Describe("[managed] [general] EKS cluster tests", func() {
 	var (
-		namespace        *corev1.Namespace
-		ctx              context.Context
-		specName         = "cluster"
-		clusterName      string
-		cniAddonName     = "vpc-cni"
-		corednsAddonName = "coredns"
+		namespace    *corev1.Namespace
+		ctx          context.Context
+		specName     = "cluster"
+		clusterName  string
+		cniAddonName = "vpc-cni"
 	)
 
 	shared.ConditionalIt(runGeneralTests, "should create a cluster and add nodes", func() {
@@ -50,7 +49,6 @@ var _ = ginkgo.Describe("[managed] [general] EKS cluster tests", func() {
 		Expect(e2eCtx.E2EConfig).ToNot(BeNil(), "Invalid argument. e2eConfig can't be nil when calling %s spec", specName)
 		Expect(e2eCtx.E2EConfig.Variables).To(HaveKey(shared.KubernetesVersion))
 		Expect(e2eCtx.E2EConfig.Variables).To(HaveKey(shared.CNIAddonVersion))
-		Expect(e2eCtx.E2EConfig.Variables).To(HaveKey(shared.CorednsAddonVersion))
 
 		ctx = context.TODO()
 		namespace = shared.SetupSpecNamespace(ctx, specName, e2eCtx)
@@ -58,7 +56,7 @@ var _ = ginkgo.Describe("[managed] [general] EKS cluster tests", func() {
 		eksClusterName := getEKSClusterName(namespace.Name, clusterName)
 
 		ginkgo.By("default iam role should exist")
-		VerifyRoleExistsAndOwned(ekscontrolplanev1.DefaultEKSControlPlaneRole, eksClusterName, false, e2eCtx.BootstrapUserAWSSession)
+		VerifyRoleExistsAndOwned(ctx, ekscontrolplanev1.DefaultEKSControlPlaneRole, eksClusterName, false, e2eCtx.AWSSession)
 
 		ginkgo.By("should create an EKS control plane")
 		ManagedClusterSpec(ctx, func() ManagedClusterSpecInput {
@@ -70,7 +68,7 @@ var _ = ginkgo.Describe("[managed] [general] EKS cluster tests", func() {
 				Namespace:                namespace,
 				ClusterName:              clusterName,
 				Flavour:                  EKSControlPlaneOnlyWithAddonFlavor,
-				ControlPlaneMachineCount: 1, //NOTE: this cannot be zero as clusterctl returns an error
+				ControlPlaneMachineCount: 1, // NOTE: this cannot be zero as clusterctl returns an error
 				WorkerMachineCount:       0,
 			}
 		})
@@ -95,20 +93,7 @@ var _ = ginkgo.Describe("[managed] [general] EKS cluster tests", func() {
 				Namespace:             namespace,
 				ClusterName:           clusterName,
 				AddonName:             cniAddonName,
-				AddonVersion:          e2eCtx.E2EConfig.GetVariable(shared.CNIAddonVersion),
-			}
-		})
-
-		ginkgo.By("should have the Coredns addon installed")
-		CheckAddonExistsSpec(ctx, func() CheckAddonExistsSpecInput {
-			return CheckAddonExistsSpecInput{
-				E2EConfig:             e2eCtx.E2EConfig,
-				BootstrapClusterProxy: e2eCtx.Environment.BootstrapClusterProxy,
-				AWSSession:            e2eCtx.BootstrapUserAWSSession,
-				Namespace:             namespace,
-				ClusterName:           clusterName,
-				AddonName:             corednsAddonName,
-				AddonVersion:          e2eCtx.E2EConfig.GetVariable(shared.CorednsAddonVersion),
+				AddonVersion:          e2eCtx.E2EConfig.MustGetVariable(shared.CNIAddonVersion),
 			}
 		})
 
@@ -176,7 +161,7 @@ var _ = ginkgo.Describe("[managed] [general] EKS cluster tests", func() {
 			}
 		})
 
-		shared.Byf("getting cluster with name %s", clusterName)
+		ginkgo.By(fmt.Sprintf("getting cluster with name %s", clusterName))
 		cluster := framework.GetClusterByName(ctx, framework.GetClusterByNameInput{
 			Getter:    e2eCtx.Environment.BootstrapClusterProxy.GetClient(),
 			Namespace: namespace.Name,
@@ -189,8 +174,10 @@ var _ = ginkgo.Describe("[managed] [general] EKS cluster tests", func() {
 			Cluster: cluster,
 		})
 		framework.WaitForClusterDeleted(ctx, framework.WaitForClusterDeletedInput{
-			Getter:  e2eCtx.Environment.BootstrapClusterProxy.GetClient(),
-			Cluster: cluster,
+			ClusterProxy:         e2eCtx.Environment.BootstrapClusterProxy,
+			Cluster:              cluster,
+			ClusterctlConfigPath: e2eCtx.Environment.ClusterctlConfigPath,
+			ArtifactFolder:       e2eCtx.Settings.ArtifactFolder,
 		}, e2eCtx.E2EConfig.GetIntervals("", "wait-delete-cluster")...)
 	})
 })

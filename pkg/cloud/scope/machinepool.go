@@ -27,46 +27,31 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	infrav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	ekscontrolplanev1 "sigs.k8s.io/cluster-api-provider-aws/v2/controlplane/eks/api/v1beta2"
 	expinfrav1 "sigs.k8s.io/cluster-api-provider-aws/v2/exp/api/v1beta2"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/pkg/logger"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/cluster-api/controllers/remote"
-	capierrors "sigs.k8s.io/cluster-api/errors"
-	expclusterv1 "sigs.k8s.io/cluster-api/exp/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util"
-	"sigs.k8s.io/cluster-api/util/conditions"
+	v1beta1conditions "sigs.k8s.io/cluster-api/util/deprecated/v1beta1/conditions"
+	v1beta1patch "sigs.k8s.io/cluster-api/util/deprecated/v1beta1/patch"
 	"sigs.k8s.io/cluster-api/util/patch"
-)
-
-const (
-	// ReplicasManagedByAnnotation is an annotation that indicates external (non-Cluster API) management of infra scaling.
-	// The practical effect of this is that the capi "replica" count is derived from the number of observed infra machines,
-	// instead of being a source of truth for eventual consistency.
-	//
-	// N.B. this is to be replaced by a direct reference to CAPI once https://github.com/kubernetes-sigs/cluster-api/pull/7107 is meged.
-	ReplicasManagedByAnnotation = "cluster.x-k8s.io/replicas-managed-by"
-
-	// ExternalAutoscalerReplicasManagedByAnnotationValue is used with the "cluster.x-k8s.io/replicas-managed-by" annotation
-	// to indicate an external autoscaler enforces replica count.
-	//
-	// N.B. this is to be replaced by a direct reference to CAPI once https://github.com/kubernetes-sigs/cluster-api/pull/7107 is meged.
-	ExternalAutoscalerReplicasManagedByAnnotationValue = "external-autoscaler"
 )
 
 // MachinePoolScope defines a scope defined around a machine and its cluster.
 type MachinePoolScope struct {
 	logger.Logger
 	client.Client
-	patchHelper                *patch.Helper
+	patchHelper                *v1beta1patch.Helper
 	capiMachinePoolPatchHelper *patch.Helper
 
 	Cluster        *clusterv1.Cluster
-	MachinePool    *expclusterv1.MachinePool
+	MachinePool    *clusterv1.MachinePool
 	InfraCluster   EC2Scope
 	AWSMachinePool *expinfrav1.AWSMachinePool
 }
@@ -77,7 +62,7 @@ type MachinePoolScopeParams struct {
 	Logger *logger.Logger
 
 	Cluster        *clusterv1.Cluster
-	MachinePool    *expclusterv1.MachinePool
+	MachinePool    *clusterv1.MachinePool
 	InfraCluster   EC2Scope
 	AWSMachinePool *expinfrav1.AWSMachinePool
 }
@@ -114,7 +99,7 @@ func NewMachinePoolScope(params MachinePoolScopeParams) (*MachinePoolScope, erro
 		params.Logger = logger.NewLogger(log)
 	}
 
-	ampHelper, err := patch.NewHelper(params.AWSMachinePool, params.Client)
+	ampHelper, err := v1beta1patch.NewHelper(params.AWSMachinePool, params.Client)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to init AWSMachinePool patch helper")
 	}
@@ -136,6 +121,11 @@ func NewMachinePoolScope(params MachinePoolScopeParams) (*MachinePoolScope, erro
 	}, nil
 }
 
+// Ignition gets the ignition config.
+func (m *MachinePoolScope) Ignition() *infrav1.Ignition {
+	return m.AWSMachinePool.Spec.Ignition
+}
+
 // Name returns the AWSMachinePool name.
 func (m *MachinePoolScope) Name() string {
 	return m.AWSMachinePool.Name
@@ -146,36 +136,26 @@ func (m *MachinePoolScope) Namespace() string {
 	return m.AWSMachinePool.Namespace
 }
 
-// GetRawBootstrapData returns the bootstrap data from the secret in the Machine's bootstrap.dataSecretName.
-// todo(rudoi): stolen from MachinePool - any way to reuse?
-func (m *MachinePoolScope) GetRawBootstrapData() ([]byte, error) {
-	data, _, err := m.getBootstrapData()
-
-	return data, err
-}
-
-func (m *MachinePoolScope) GetRawBootstrapDataWithFormat() ([]byte, string, error) {
-	return m.getBootstrapData()
-}
-
-func (m *MachinePoolScope) getBootstrapData() ([]byte, string, error) {
+// GetRawBootstrapData returns the bootstrap data from the secret in the Machine's bootstrap.dataSecretName,
+// including the secret's namespaced name.
+func (m *MachinePoolScope) GetRawBootstrapData() ([]byte, string, *types.NamespacedName, error) {
 	if m.MachinePool.Spec.Template.Spec.Bootstrap.DataSecretName == nil {
-		return nil, "", errors.New("error retrieving bootstrap data: linked Machine's bootstrap.dataSecretName is nil")
+		return nil, "", nil, errors.New("error retrieving bootstrap data: linked Machine's bootstrap.dataSecretName is nil")
 	}
 
 	secret := &corev1.Secret{}
 	key := types.NamespacedName{Namespace: m.Namespace(), Name: *m.MachinePool.Spec.Template.Spec.Bootstrap.DataSecretName}
 
 	if err := m.Client.Get(context.TODO(), key, secret); err != nil {
-		return nil, "", errors.Wrapf(err, "failed to retrieve bootstrap data secret for AWSMachine %s/%s", m.Namespace(), m.Name())
+		return nil, "", nil, errors.Wrapf(err, "failed to retrieve bootstrap data secret %s for AWSMachinePool %s/%s", key.Name, m.Namespace(), m.Name())
 	}
 
 	value, ok := secret.Data["value"]
 	if !ok {
-		return nil, "", errors.New("error retrieving bootstrap data: secret value key is missing")
+		return nil, "", nil, errors.New("error retrieving bootstrap data: secret value key is missing")
 	}
 
-	return value, string(secret.Data["format"]), nil
+	return value, string(secret.Data["format"]), &key, nil
 }
 
 // AdditionalTags merges AdditionalTags from the scope's AWSCluster and AWSMachinePool. If the same key is present in both,
@@ -196,7 +176,7 @@ func (m *MachinePoolScope) PatchObject() error {
 	return m.patchHelper.Patch(
 		context.TODO(),
 		m.AWSMachinePool,
-		patch.WithOwnedConditions{Conditions: []clusterv1.ConditionType{
+		v1beta1patch.WithOwnedConditions{Conditions: []clusterv1beta1.ConditionType{
 			expinfrav1.ASGReadyCondition,
 			expinfrav1.LaunchTemplateReadyCondition,
 		}})
@@ -225,11 +205,11 @@ func (m *MachinePoolScope) SetAnnotation(key, value string) {
 
 // SetFailureMessage sets the AWSMachine status failure message.
 func (m *MachinePoolScope) SetFailureMessage(v error) {
-	m.AWSMachinePool.Status.FailureMessage = pointer.StringPtr(v.Error())
+	m.AWSMachinePool.Status.FailureMessage = ptr.To[string](v.Error())
 }
 
 // SetFailureReason sets the AWSMachine status failure reason.
-func (m *MachinePoolScope) SetFailureReason(v capierrors.MachineStatusError) {
+func (m *MachinePoolScope) SetFailureReason(v string) {
 	m.AWSMachinePool.Status.FailureReason = &v
 }
 
@@ -253,34 +233,40 @@ func (m *MachinePoolScope) SetASGStatus(v expinfrav1.ASGStatus) {
 	m.AWSMachinePool.Status.ASGStatus = &v
 }
 
+// GetObjectMeta returns the AWSMachinePool ObjectMeta.
 func (m *MachinePoolScope) GetObjectMeta() *metav1.ObjectMeta {
 	return &m.AWSMachinePool.ObjectMeta
 }
 
-func (m *MachinePoolScope) GetSetter() conditions.Setter {
+// GetSetter returns the AWSMachinePool object setter.
+func (m *MachinePoolScope) GetSetter() v1beta1conditions.Setter {
 	return m.AWSMachinePool
 }
 
+// GetEC2Scope returns the EC2 scope.
 func (m *MachinePoolScope) GetEC2Scope() EC2Scope {
 	return m.InfraCluster
 }
 
+// GetLaunchTemplateIDStatus returns the launch template ID status.
 func (m *MachinePoolScope) GetLaunchTemplateIDStatus() string {
 	return m.AWSMachinePool.Status.LaunchTemplateID
 }
 
+// SetLaunchTemplateIDStatus sets the launch template ID status.
 func (m *MachinePoolScope) SetLaunchTemplateIDStatus(id string) {
 	m.AWSMachinePool.Status.LaunchTemplateID = id
 }
 
+// GetLaunchTemplateLatestVersionStatus returns the launch template latest version status.
 func (m *MachinePoolScope) GetLaunchTemplateLatestVersionStatus() string {
 	if m.AWSMachinePool.Status.LaunchTemplateVersion != nil {
 		return *m.AWSMachinePool.Status.LaunchTemplateVersion
-	} else {
-		return ""
 	}
+	return ""
 }
 
+// SetLaunchTemplateLatestVersionStatus sets the launch template latest version status.
 func (m *MachinePoolScope) SetLaunchTemplateLatestVersionStatus(version string) {
 	m.AWSMachinePool.Status.LaunchTemplateVersion = &version
 }
@@ -302,6 +288,7 @@ func (m *MachinePoolScope) SubnetIDs(subnetIDs []string) ([]string, error) {
 		SpecAvailabilityZones:   m.AWSMachinePool.Spec.AvailabilityZones,
 		ParentAvailabilityZones: m.MachinePool.Spec.FailureDomains,
 		ControlplaneSubnets:     m.InfraCluster.Subnets(),
+		SubnetPlacementType:     m.AWSMachinePool.Spec.AvailabilityZoneSubnetType,
 	})
 }
 
@@ -388,23 +375,27 @@ func nodeIsReady(node corev1.Node) bool {
 	return false
 }
 
+// GetLaunchTemplate returns the launch template.
 func (m *MachinePoolScope) GetLaunchTemplate() *expinfrav1.AWSLaunchTemplate {
 	return &m.AWSMachinePool.Spec.AWSLaunchTemplate
 }
 
-func (m *MachinePoolScope) GetMachinePool() *expclusterv1.MachinePool {
+// GetMachinePool returns the machine pool object.
+func (m *MachinePoolScope) GetMachinePool() *clusterv1.MachinePool {
 	return m.MachinePool
 }
 
+// LaunchTemplateName returns the name of the launch template.
 func (m *MachinePoolScope) LaunchTemplateName() string {
 	return m.Name()
 }
 
+// GetRuntimeObject returns the AWSMachinePool object, in runtime.Object form.
 func (m *MachinePoolScope) GetRuntimeObject() runtime.Object {
 	return m.AWSMachinePool
 }
 
-func ReplicasExternallyManaged(mp *expclusterv1.MachinePool) bool {
-	val, ok := mp.Annotations[ReplicasManagedByAnnotation]
-	return ok && val == ExternalAutoscalerReplicasManagedByAnnotationValue
+// GetLifecycleHooks returns the desired lifecycle hooks for the ASG.
+func (m *MachinePoolScope) GetLifecycleHooks() []expinfrav1.AWSLifecycleHook {
+	return m.AWSMachinePool.Spec.AWSLifecycleHooks
 }

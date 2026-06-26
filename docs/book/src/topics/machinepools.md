@@ -20,7 +20,7 @@ Make sure to set up your AWS environment as described [here](https://cluster-api
 ```shell
 export EXP_MACHINE_POOL=true
 clusterctl init --infrastructure aws
-clusterctl generate cluster my-cluster --kubernetes-version v1.24.0 --flavor machinepool > my-cluster.yaml
+clusterctl generate cluster my-cluster --kubernetes-version v1.25.0 --flavor machinepool > my-cluster.yaml
 ```
 
 The template used for this [flavor](https://cluster-api.sigs.k8s.io/clusterctl/commands/generate-cluster.html#flavors) is located [here](https://github.com/kubernetes-sigs/cluster-api-provider-aws/blob/main/templates/cluster-template-machinepool.yaml).
@@ -76,7 +76,7 @@ spec:
         apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
         kind: AWSMachinePool
         name: capa-mp-0
-      version: v1.24.0
+      version: v1.25.0
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 kind: AWSMachinePool
@@ -136,7 +136,7 @@ spec:
         apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
         kind: AWSMachinePool
         name: capa-mp-0
-      version: v1.24.0
+      version: v1.25.0
 ```
 
 When using GitOps, make sure to ignore differences in `spec.replicas` on MachinePools. Example when using ArgoCD:
@@ -148,3 +148,7 @@ When using GitOps, make sure to ignore differences in `spec.replicas` on Machine
       jsonPointers:
         - /spec/replicas
 ```
+
+## Machine pool machines
+
+With the feature gate `MachinePoolMachines=true`, you can enable creation of `Machine`/`AWSMachine` objects for nodes created by a `AWSMachinePool`. This is experimental and will be used to introduce features such as per-node health checks.

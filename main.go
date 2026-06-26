@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Package main contains the main entrypoint for the AWS provider components.
 package main
 
 import (
@@ -21,10 +22,10 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"math/rand"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/spf13/pflag"
@@ -33,10 +34,14 @@ import (
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	cgrecord "k8s.io/client-go/tools/record"
 	"k8s.io/component-base/logs"
+	v1 "k8s.io/component-base/logs/api/v1"
 	_ "k8s.io/component-base/logs/json/register"
 	"k8s.io/klog/v2"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	// +kubebuilder:scaffold:imports
 	infrav1beta1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta1"
@@ -48,19 +53,25 @@ import (
 	ekscontrolplanev1beta1 "sigs.k8s.io/cluster-api-provider-aws/v2/controlplane/eks/api/v1beta1"
 	ekscontrolplanev1 "sigs.k8s.io/cluster-api-provider-aws/v2/controlplane/eks/api/v1beta2"
 	ekscontrolplanecontrollers "sigs.k8s.io/cluster-api-provider-aws/v2/controlplane/eks/controllers"
+	ekswebhooks "sigs.k8s.io/cluster-api-provider-aws/v2/controlplane/eks/webhooks"
+	rosacontrolplanev1 "sigs.k8s.io/cluster-api-provider-aws/v2/controlplane/rosa/api/v1beta2"
+	rosacontrolplanecontrollers "sigs.k8s.io/cluster-api-provider-aws/v2/controlplane/rosa/controllers"
+	rosawebhooks "sigs.k8s.io/cluster-api-provider-aws/v2/controlplane/rosa/webhooks"
 	expinfrav1beta1 "sigs.k8s.io/cluster-api-provider-aws/v2/exp/api/v1beta1"
 	expinfrav1 "sigs.k8s.io/cluster-api-provider-aws/v2/exp/api/v1beta2"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/exp/controlleridentitycreator"
 	expcontrollers "sigs.k8s.io/cluster-api-provider-aws/v2/exp/controllers"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/exp/instancestate"
+	expwebhooks "sigs.k8s.io/cluster-api-provider-aws/v2/exp/webhooks"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/feature"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/pkg/cloud/endpoints"
-	"sigs.k8s.io/cluster-api-provider-aws/v2/pkg/cloud/scope"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/pkg/logger"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/pkg/record"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/version"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
-	expclusterv1 "sigs.k8s.io/cluster-api/exp/api/v1beta1"
+	capawebhooks "sigs.k8s.io/cluster-api-provider-aws/v2/webhooks"
+	controlplanev1 "sigs.k8s.io/cluster-api/api/controlplane/kubeadm/v1beta2"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
+	"sigs.k8s.io/cluster-api/util/flags"
 )
 
 var (
@@ -73,9 +84,10 @@ func init() {
 	_ = eksbootstrapv1beta1.AddToScheme(scheme)
 	_ = cgscheme.AddToScheme(scheme)
 	_ = clusterv1.AddToScheme(scheme)
-	_ = expclusterv1.AddToScheme(scheme)
+	_ = controlplanev1.AddToScheme(scheme)
 	_ = ekscontrolplanev1.AddToScheme(scheme)
 	_ = ekscontrolplanev1beta1.AddToScheme(scheme)
+	_ = rosacontrolplanev1.AddToScheme(scheme)
 	_ = infrav1.AddToScheme(scheme)
 	_ = infrav1beta1.AddToScheme(scheme)
 	_ = expinfrav1beta1.AddToScheme(scheme)
@@ -84,20 +96,25 @@ func init() {
 }
 
 var (
-	metricsBindAddr          string
-	enableLeaderElection     bool
-	leaderElectionNamespace  string
-	watchNamespace           string
-	watchFilterValue         string
-	profilerAddress          string
-	awsClusterConcurrency    int
-	instanceStateConcurrency int
-	awsMachineConcurrency    int
-	syncPeriod               time.Duration
-	webhookPort              int
-	webhookCertDir           string
-	healthAddr               string
-	serviceEndpoints         string
+	enableLeaderElection        bool
+	leaderElectionLeaseDuration time.Duration
+	leaderElectionRenewDeadline time.Duration
+	leaderElectionRetryPeriod   time.Duration
+	leaderElectionNamespace     string
+	watchNamespace              string
+	watchFilterValue            string
+	profilerAddress             string
+	awsClusterConcurrency       int
+	instanceStateConcurrency    int
+	awsMachineConcurrency       int
+	waitInfraPeriod             time.Duration
+	maxWaitActiveUpdateDelete   time.Duration
+	syncPeriod                  time.Duration
+	webhookPort                 int
+	webhookCertDir              string
+	healthAddr                  string
+	serviceEndpoints            string
+	disabledControllers         []string
 
 	// maxEKSSyncPeriod is the maximum allowed duration for the sync-period flag when using EKS. It is set to 10 minutes
 	// because during resync it will create a new AWS auth token which can a maximum life of 15 minutes and this ensures
@@ -106,23 +123,42 @@ var (
 	errMaxSyncPeriodExceeded = errors.New("sync period greater than maximum allowed")
 	errEKSInvalidFlags       = errors.New("invalid EKS flag combination")
 
-	logOptions = logs.NewOptions()
+	logOptions     = logs.NewOptions()
+	managerOptions = flags.ManagerOptions{}
 )
 
+// Add RBAC for the authorized diagnostics endpoint.
+// +kubebuilder:rbac:groups=authentication.k8s.io,resources=tokenreviews,verbs=create
+// +kubebuilder:rbac:groups=authorization.k8s.io,resources=subjectaccessreviews,verbs=create
+
 func main() {
-	rand.Seed(time.Now().UnixNano())
+	setupLog.Info("starting cluster-api-provider-aws", "version", version.Get().String())
 	initFlags(pflag.CommandLine)
 	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
 	pflag.Parse()
 
-	if err := logOptions.ValidateAndApply(nil); err != nil {
+	if err := controllers.ValidateNamesAndDisable(disabledControllers); err != nil {
+		setupLog.Error(err, "unable to validate disabled controller names")
+		os.Exit(1)
+	}
+
+	if err := v1.ValidateAndApply(logOptions, nil); err != nil {
 		setupLog.Error(err, "unable to validate and apply log options")
 		os.Exit(1)
 	}
 	ctrl.SetLogger(klog.Background())
 
+	tlsOptions, metricsOptions, err := flags.GetManagerOptions(managerOptions)
+	if err != nil {
+		setupLog.Error(err, "Unable to start manager: invalid flags")
+	}
+
+	var watchNamespaces map[string]cache.Config
 	if watchNamespace != "" {
 		setupLog.Info("Watching cluster-api objects only in namespace for reconciliation", "namespace", watchNamespace)
+		watchNamespaces = map[string]cache.Config{
+			watchNamespace: {},
+		}
 	}
 
 	if profilerAddress != "" {
@@ -151,17 +187,25 @@ func main() {
 	restConfig.UserAgent = "cluster-api-provider-aws-controller"
 	mgr, err := ctrl.NewManager(restConfig, ctrl.Options{
 		Scheme:                     scheme,
-		MetricsBindAddress:         metricsBindAddr,
+		Metrics:                    *metricsOptions,
 		LeaderElection:             enableLeaderElection,
+		LeaseDuration:              &leaderElectionLeaseDuration,
+		RenewDeadline:              &leaderElectionRenewDeadline,
+		RetryPeriod:                &leaderElectionRetryPeriod,
 		LeaderElectionResourceLock: resourcelock.LeasesResourceLock,
 		LeaderElectionID:           "controller-leader-elect-capa",
 		LeaderElectionNamespace:    leaderElectionNamespace,
-		SyncPeriod:                 &syncPeriod,
-		Namespace:                  watchNamespace,
-		EventBroadcaster:           broadcaster,
-		Port:                       webhookPort,
-		CertDir:                    webhookCertDir,
-		HealthProbeBindAddress:     healthAddr,
+		Cache: cache.Options{
+			DefaultNamespaces: watchNamespaces,
+			SyncPeriod:        &syncPeriod,
+		},
+		WebhookServer: webhook.NewServer(webhook.Options{
+			Port:    webhookPort,
+			CertDir: webhookCertDir,
+			TLSOpts: tlsOptions,
+		}),
+		EventBroadcaster:       broadcaster,
+		HealthProbeBindAddress: healthAddr,
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
@@ -174,9 +218,14 @@ func main() {
 	setupLog.Info(fmt.Sprintf("feature gates: %+v\n", feature.Gates))
 
 	externalResourceGC := false
+	alternativeGCStrategy := false
 	if feature.Gates.Enabled(feature.ExternalResourceGC) {
 		setupLog.Info("enabling external resource garbage collection")
 		externalResourceGC = true
+		if feature.Gates.Enabled(feature.AlternativeGCStrategy) {
+			setupLog.Info("enabling alternative garbage collection strategy")
+			alternativeGCStrategy = true
+		}
 	}
 
 	if feature.Gates.Enabled(feature.BootstrapFormatIgnition) {
@@ -184,17 +233,89 @@ func main() {
 	}
 
 	// Parse service endpoints.
-	awsServiceEndpoints, err := endpoints.ParseFlag(serviceEndpoints)
+	err = endpoints.ParseFlag(serviceEndpoints)
 	if err != nil {
 		setupLog.Error(err, "unable to parse service endpoints", "controller", "AWSCluster")
 		os.Exit(1)
 	}
 
-	setupReconcilersAndWebhooks(ctx, mgr, awsServiceEndpoints, externalResourceGC)
+	setupReconcilersAndWebhooks(ctx, mgr, externalResourceGC, alternativeGCStrategy)
 	if feature.Gates.Enabled(feature.EKS) {
-		setupEKSReconcilersAndWebhooks(ctx, mgr, awsServiceEndpoints, externalResourceGC)
+		setupEKSReconcilersAndWebhooks(ctx, mgr, externalResourceGC, alternativeGCStrategy, waitInfraPeriod)
 	}
 
+	if feature.Gates.Enabled(feature.ROSA) {
+		setupLog.Debug("enabling ROSA control plane controller")
+		if err := (&rosacontrolplanecontrollers.ROSAControlPlaneReconciler{
+			Client:           mgr.GetClient(),
+			WatchFilterValue: watchFilterValue,
+			WaitInfraPeriod:  waitInfraPeriod,
+		}).SetupWithManager(ctx, mgr, controller.Options{MaxConcurrentReconciles: awsClusterConcurrency, RecoverPanic: ptr.To[bool](true)}); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "ROSAControlPlane")
+			os.Exit(1)
+		}
+
+		setupLog.Debug("enabling ROSA cluster controller")
+		if err := (&controllers.ROSAClusterReconciler{
+			Client:           mgr.GetClient(),
+			Recorder:         mgr.GetEventRecorderFor("rosacluster-controller"),
+			WatchFilterValue: watchFilterValue,
+		}).SetupWithManager(ctx, mgr, controller.Options{MaxConcurrentReconciles: awsClusterConcurrency, RecoverPanic: ptr.To[bool](true)}); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "ROSACluster")
+			os.Exit(1)
+		}
+
+		setupLog.Debug("enabling ROSA machinepool controller")
+		if err := (&expcontrollers.ROSAMachinePoolReconciler{
+			Client:           mgr.GetClient(),
+			Recorder:         mgr.GetEventRecorderFor("rosamachinepool-controller"),
+			WatchFilterValue: watchFilterValue,
+		}).SetupWithManager(ctx, mgr, controller.Options{MaxConcurrentReconciles: awsClusterConcurrency, RecoverPanic: ptr.To[bool](true)}); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "ROSAMachinePool")
+			os.Exit(1)
+		}
+
+		setupLog.Debug("enabling ROSA network controller")
+		if err = (&expcontrollers.ROSANetworkReconciler{
+			Client:           mgr.GetClient(),
+			WatchFilterValue: watchFilterValue,
+			Log:              ctrl.Log.WithName("controllers").WithName("ROSANetwork"),
+			Scheme:           mgr.GetScheme(),
+		}).SetupWithManager(ctx, mgr, controller.Options{MaxConcurrentReconciles: awsClusterConcurrency, RecoverPanic: ptr.To[bool](true)}); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "ROSANetwork")
+			os.Exit(1)
+		}
+
+		if err := (&rosawebhooks.ROSAControlPlane{}).SetupWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "ROSAControlPlane")
+			os.Exit(1)
+		}
+
+		if err := (&expwebhooks.ROSAMachinePool{}).SetupWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "ROSAMachinePool")
+			os.Exit(1)
+		}
+
+		if err := (&expwebhooks.ROSANetwork{}).SetupWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "ROSANetwork")
+			os.Exit(1)
+		}
+
+		setupLog.Debug("enabling ROSA role config controller")
+		if err = (&expcontrollers.ROSARoleConfigReconciler{
+			Client:           mgr.GetClient(),
+			Recorder:         mgr.GetEventRecorderFor("rosaroleconfig-controller"),
+			WatchFilterValue: watchFilterValue,
+		}).SetupWithManager(ctx, mgr, controller.Options{MaxConcurrentReconciles: awsClusterConcurrency, RecoverPanic: ptr.To[bool](true)}); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "ROSARoleConfig")
+			os.Exit(1)
+		}
+
+		if err := (&expwebhooks.ROSARoleConfig{}).SetupWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "ROSARoleConfig")
+			os.Exit(1)
+		}
+	}
 	// +kubebuilder:scaffold:builder
 
 	if err := mgr.AddReadyzCheck("webhook", mgr.GetWebhookServer().StartedChecker()); err != nil {
@@ -214,43 +335,64 @@ func main() {
 	}
 }
 
-func setupReconcilersAndWebhooks(ctx context.Context, mgr ctrl.Manager, awsServiceEndpoints []scope.ServiceEndpoint,
-	externalResourceGC bool,
+func setupReconcilersAndWebhooks(ctx context.Context, mgr ctrl.Manager,
+	externalResourceGC, alternativeGCStrategy bool,
 ) {
-	if err := (&controllers.AWSMachineReconciler{
-		Client:           mgr.GetClient(),
-		Log:              ctrl.Log.WithName("controllers").WithName("AWSMachine"),
-		Recorder:         mgr.GetEventRecorderFor("awsmachine-controller"),
-		Endpoints:        awsServiceEndpoints,
-		WatchFilterValue: watchFilterValue,
-	}).SetupWithManager(ctx, mgr, controller.Options{MaxConcurrentReconciles: awsMachineConcurrency, RecoverPanic: true}); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "AWSMachine")
-		os.Exit(1)
-	}
+	// Default case - unmanaged controllers are enabled.
+	if !controllers.IsDisabled(controllers.Unmanaged) {
+		if err := (&controllers.AWSMachineReconciler{
+			Client:                       mgr.GetClient(),
+			Log:                          ctrl.Log.WithName("controllers").WithName("AWSMachine"),
+			Recorder:                     mgr.GetEventRecorderFor("awsmachine-controller"),
+			WatchFilterValue:             watchFilterValue,
+			TagUnmanagedNetworkResources: feature.Gates.Enabled(feature.TagUnmanagedNetworkResources),
+			MaxWaitActiveUpdateDelete:    maxWaitActiveUpdateDelete,
+		}).SetupWithManager(ctx, mgr, controller.Options{MaxConcurrentReconciles: awsMachineConcurrency, RecoverPanic: ptr.To[bool](true)}); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "AWSMachine")
+			os.Exit(1)
+		}
+		setupLog.Info("controller disabled", "controller", "AWSMachine", "controller-group", controllers.Unmanaged)
 
-	if err := (&controllers.AWSClusterReconciler{
-		Client:             mgr.GetClient(),
-		Recorder:           mgr.GetEventRecorderFor("awscluster-controller"),
-		Endpoints:          awsServiceEndpoints,
-		WatchFilterValue:   watchFilterValue,
-		ExternalResourceGC: externalResourceGC,
-	}).SetupWithManager(ctx, mgr, controller.Options{MaxConcurrentReconciles: awsClusterConcurrency, RecoverPanic: true}); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "AWSCluster")
-		os.Exit(1)
+		if err := (&controllers.AWSClusterReconciler{
+			Client:                       mgr.GetClient(),
+			Recorder:                     mgr.GetEventRecorderFor("awscluster-controller"),
+			WatchFilterValue:             watchFilterValue,
+			ExternalResourceGC:           externalResourceGC,
+			AlternativeGCStrategy:        alternativeGCStrategy,
+			TagUnmanagedNetworkResources: feature.Gates.Enabled(feature.TagUnmanagedNetworkResources),
+			MaxWaitActiveUpdateDelete:    maxWaitActiveUpdateDelete,
+		}).SetupWithManager(ctx, mgr, controller.Options{MaxConcurrentReconciles: awsClusterConcurrency, RecoverPanic: ptr.To[bool](true)}); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "AWSCluster")
+			os.Exit(1)
+		}
+
+		setupLog.Info("enabling AWSMachineTemplate controller")
+		if err := (&controllers.AWSMachineTemplateReconciler{
+			Client:           mgr.GetClient(),
+			WatchFilterValue: watchFilterValue,
+		}).SetupWithManager(ctx, mgr, controller.Options{MaxConcurrentReconciles: awsClusterConcurrency, RecoverPanic: ptr.To[bool](true)}); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "AWSMachineTemplate")
+			os.Exit(1)
+		}
+	} else {
+		setupLog.Info("controller disabled", "controller", "AWSMachine", "controller-group", controllers.Unmanaged)
+		setupLog.Info("controller disabled", "controller", "AWSCluster", "controller-group", controllers.Unmanaged)
+		setupLog.Info("controller disabled", "controller", "AWSMachineTemplate", "controller-group", controllers.Unmanaged)
 	}
 
 	if feature.Gates.Enabled(feature.MachinePool) {
 		setupLog.Debug("enabling machine pool controller and webhook")
 		if err := (&expcontrollers.AWSMachinePoolReconciler{
-			Client:           mgr.GetClient(),
-			Recorder:         mgr.GetEventRecorderFor("awsmachinepool-controller"),
-			WatchFilterValue: watchFilterValue,
-		}).SetupWithManager(ctx, mgr, controller.Options{MaxConcurrentReconciles: instanceStateConcurrency, RecoverPanic: true}); err != nil {
+			Client:                       mgr.GetClient(),
+			Recorder:                     mgr.GetEventRecorderFor("awsmachinepool-controller"),
+			WatchFilterValue:             watchFilterValue,
+			TagUnmanagedNetworkResources: feature.Gates.Enabled(feature.TagUnmanagedNetworkResources),
+		}).SetupWithManager(ctx, mgr, controller.Options{MaxConcurrentReconciles: instanceStateConcurrency, RecoverPanic: ptr.To[bool](true)}); err != nil {
 			setupLog.Error(err, "unable to create controller", "controller", "AWSMachinePool")
 			os.Exit(1)
 		}
 
-		if err := (&expinfrav1.AWSMachinePool{}).SetupWebhookWithManager(mgr); err != nil {
+		if err := (&expwebhooks.AWSMachinePool{}).SetupWebhookWithManager(mgr); err != nil {
 			setupLog.Error(err, "unable to create webhook", "webhook", "AWSMachinePool")
 			os.Exit(1)
 		}
@@ -261,9 +403,8 @@ func setupReconcilersAndWebhooks(ctx context.Context, mgr ctrl.Manager, awsServi
 		if err := (&instancestate.AwsInstanceStateReconciler{
 			Client:           mgr.GetClient(),
 			Log:              ctrl.Log.WithName("controllers").WithName("AWSInstanceStateController"),
-			Endpoints:        awsServiceEndpoints,
 			WatchFilterValue: watchFilterValue,
-		}).SetupWithManager(ctx, mgr, controller.Options{MaxConcurrentReconciles: instanceStateConcurrency, RecoverPanic: true}); err != nil {
+		}).SetupWithManager(ctx, mgr, controller.Options{MaxConcurrentReconciles: instanceStateConcurrency, RecoverPanic: ptr.To[bool](true)}); err != nil {
 			setupLog.Error(err, "unable to create controller", "controller", "AWSInstanceStateController")
 			os.Exit(1)
 		}
@@ -274,46 +415,45 @@ func setupReconcilersAndWebhooks(ctx context.Context, mgr ctrl.Manager, awsServi
 		if err := (&controlleridentitycreator.AWSControllerIdentityReconciler{
 			Client:           mgr.GetClient(),
 			Log:              ctrl.Log.WithName("controllers").WithName("AWSControllerIdentity"),
-			Endpoints:        awsServiceEndpoints,
 			WatchFilterValue: watchFilterValue,
-		}).SetupWithManager(ctx, mgr, controller.Options{MaxConcurrentReconciles: awsClusterConcurrency, RecoverPanic: true}); err != nil {
+		}).SetupWithManager(ctx, mgr, controller.Options{MaxConcurrentReconciles: awsClusterConcurrency, RecoverPanic: ptr.To[bool](true)}); err != nil {
 			setupLog.Error(err, "unable to create controller", "controller", "AWSControllerIdentity")
 			os.Exit(1)
 		}
 	}
 
-	if err := (&infrav1.AWSMachineTemplateWebhook{}).SetupWebhookWithManager(mgr); err != nil {
+	if err := (&capawebhooks.AWSMachineTemplate{}).SetupWebhookWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create webhook", "webhook", "AWSMachineTemplate")
 		os.Exit(1)
 	}
-	if err := (&infrav1.AWSCluster{}).SetupWebhookWithManager(mgr); err != nil {
+	if err := (&capawebhooks.AWSCluster{}).SetupWebhookWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create webhook", "webhook", "AWSCluster")
 		os.Exit(1)
 	}
-	if err := (&infrav1.AWSClusterTemplate{}).SetupWebhookWithManager(mgr); err != nil {
+	if err := (&capawebhooks.AWSClusterTemplate{}).SetupWebhookWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create webhook", "webhook", "AWSClusterTemplate")
 		os.Exit(1)
 	}
-	if err := (&infrav1.AWSClusterControllerIdentity{}).SetupWebhookWithManager(mgr); err != nil {
+	if err := (&capawebhooks.AWSClusterControllerIdentity{}).SetupWebhookWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create webhook", "webhook", "AWSClusterControllerIdentity")
 		os.Exit(1)
 	}
-	if err := (&infrav1.AWSClusterRoleIdentity{}).SetupWebhookWithManager(mgr); err != nil {
+	if err := (&capawebhooks.AWSClusterRoleIdentity{}).SetupWebhookWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create webhook", "webhook", "AWSClusterRoleIdentity")
 		os.Exit(1)
 	}
-	if err := (&infrav1.AWSClusterStaticIdentity{}).SetupWebhookWithManager(mgr); err != nil {
+	if err := (&capawebhooks.AWSClusterStaticIdentity{}).SetupWebhookWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create webhook", "webhook", "AWSClusterStaticIdentity")
 		os.Exit(1)
 	}
-	if err := (&infrav1.AWSMachine{}).SetupWebhookWithManager(mgr); err != nil {
+	if err := (&capawebhooks.AWSMachine{}).SetupWebhookWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create webhook", "webhook", "AWSMachine")
 		os.Exit(1)
 	}
 }
 
-func setupEKSReconcilersAndWebhooks(ctx context.Context, mgr ctrl.Manager, awsServiceEndpoints []scope.ServiceEndpoint,
-	externalResourceGC bool,
+func setupEKSReconcilersAndWebhooks(ctx context.Context, mgr ctrl.Manager,
+	externalResourceGC, alternativeGCStrategy bool, waitInfraPeriod time.Duration,
 ) {
 	setupLog.Info("enabling EKS controllers and webhooks")
 
@@ -333,13 +473,16 @@ func setupEKSReconcilersAndWebhooks(ctx context.Context, mgr ctrl.Manager, awsSe
 
 	setupLog.Debug("enabling EKS control plane controller")
 	if err := (&ekscontrolplanecontrollers.AWSManagedControlPlaneReconciler{
-		Client:               mgr.GetClient(),
-		EnableIAM:            enableIAM,
-		AllowAdditionalRoles: allowAddRoles,
-		Endpoints:            awsServiceEndpoints,
-		WatchFilterValue:     watchFilterValue,
-		ExternalResourceGC:   externalResourceGC,
-	}).SetupWithManager(ctx, mgr, controller.Options{MaxConcurrentReconciles: awsClusterConcurrency, RecoverPanic: true}); err != nil {
+		Client:                       mgr.GetClient(),
+		EnableIAM:                    enableIAM,
+		AllowAdditionalRoles:         allowAddRoles,
+		WatchFilterValue:             watchFilterValue,
+		ExternalResourceGC:           externalResourceGC,
+		AlternativeGCStrategy:        alternativeGCStrategy,
+		WaitInfraPeriod:              waitInfraPeriod,
+		MaxWaitActiveUpdateDelete:    maxWaitActiveUpdateDelete,
+		TagUnmanagedNetworkResources: feature.Gates.Enabled(feature.TagUnmanagedNetworkResources),
+	}).SetupWithManager(ctx, mgr, controller.Options{MaxConcurrentReconciles: awsClusterConcurrency, RecoverPanic: ptr.To[bool](true)}); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "AWSManagedControlPlane")
 		os.Exit(1)
 	}
@@ -348,8 +491,26 @@ func setupEKSReconcilersAndWebhooks(ctx context.Context, mgr ctrl.Manager, awsSe
 	if err := (&eksbootstrapcontrollers.EKSConfigReconciler{
 		Client:           mgr.GetClient(),
 		WatchFilterValue: watchFilterValue,
-	}).SetupWithManager(ctx, mgr, controller.Options{MaxConcurrentReconciles: awsClusterConcurrency, RecoverPanic: true}); err != nil {
+	}).SetupWithManager(ctx, mgr, controller.Options{MaxConcurrentReconciles: awsClusterConcurrency, RecoverPanic: ptr.To[bool](true)}); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "EKSConfig")
+		os.Exit(1)
+	}
+
+	if err := (&eksbootstrapcontrollers.NodeadmConfigReconciler{
+		Client:           mgr.GetClient(),
+		WatchFilterValue: watchFilterValue,
+	}).SetupWithManager(ctx, mgr, controller.Options{MaxConcurrentReconciles: awsClusterConcurrency, RecoverPanic: ptr.To[bool](true)}); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "NodeadmConfig")
+		os.Exit(1)
+	}
+
+	setupLog.Debug("enabling EKS managed cluster controller")
+	if err := (&controllers.AWSManagedClusterReconciler{
+		Client:           mgr.GetClient(),
+		Recorder:         mgr.GetEventRecorderFor("awsmanagedcluster-controller"),
+		WatchFilterValue: watchFilterValue,
+	}).SetupWithManager(ctx, mgr, controller.Options{MaxConcurrentReconciles: awsClusterConcurrency, RecoverPanic: ptr.To[bool](true)}); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "AWSManagedCluster")
 		os.Exit(1)
 	}
 
@@ -359,13 +520,12 @@ func setupEKSReconcilersAndWebhooks(ctx context.Context, mgr ctrl.Manager, awsSe
 			Client:           mgr.GetClient(),
 			Recorder:         mgr.GetEventRecorderFor("awsfargateprofile-reconciler"),
 			EnableIAM:        enableIAM,
-			Endpoints:        awsServiceEndpoints,
 			WatchFilterValue: watchFilterValue,
-		}).SetupWithManager(ctx, mgr, controller.Options{MaxConcurrentReconciles: awsClusterConcurrency, RecoverPanic: true}); err != nil {
+		}).SetupWithManager(ctx, mgr, controller.Options{MaxConcurrentReconciles: awsClusterConcurrency, RecoverPanic: ptr.To[bool](true)}); err != nil {
 			setupLog.Error(err, "unable to create controller", "controller", "AWSFargateProfile")
 		}
 
-		if err := (&expinfrav1.AWSFargateProfile{}).SetupWebhookWithManager(mgr); err != nil {
+		if err := (&expwebhooks.AWSFargateProfile{}).SetupWebhookWithManager(mgr); err != nil {
 			setupLog.Error(err, "unable to create webhook", "webhook", "AWSFargateProfile")
 			os.Exit(1)
 		}
@@ -374,42 +534,62 @@ func setupEKSReconcilersAndWebhooks(ctx context.Context, mgr ctrl.Manager, awsSe
 	if feature.Gates.Enabled(feature.MachinePool) {
 		setupLog.Debug("enabling EKS managed machine pool controller")
 		if err := (&expcontrollers.AWSManagedMachinePoolReconciler{
-			AllowAdditionalRoles: allowAddRoles,
-			Client:               mgr.GetClient(),
-			EnableIAM:            enableIAM,
-			Endpoints:            awsServiceEndpoints,
-			Recorder:             mgr.GetEventRecorderFor("awsmanagedmachinepool-reconciler"),
-			WatchFilterValue:     watchFilterValue,
-		}).SetupWithManager(ctx, mgr, controller.Options{MaxConcurrentReconciles: instanceStateConcurrency, RecoverPanic: true}); err != nil {
+			AllowAdditionalRoles:         allowAddRoles,
+			Client:                       mgr.GetClient(),
+			EnableIAM:                    enableIAM,
+			Recorder:                     mgr.GetEventRecorderFor("awsmanagedmachinepool-reconciler"),
+			WatchFilterValue:             watchFilterValue,
+			TagUnmanagedNetworkResources: feature.Gates.Enabled(feature.TagUnmanagedNetworkResources),
+			MaxWaitActiveUpdateDelete:    maxWaitActiveUpdateDelete,
+		}).SetupWithManager(ctx, mgr, controller.Options{MaxConcurrentReconciles: instanceStateConcurrency, RecoverPanic: ptr.To[bool](true)}); err != nil {
 			setupLog.Error(err, "unable to create controller", "controller", "AWSManagedMachinePool")
 			os.Exit(1)
 		}
 
-		if err := (&expinfrav1.AWSManagedMachinePool{}).SetupWebhookWithManager(mgr); err != nil {
+		if err := (&expwebhooks.AWSManagedMachinePool{}).SetupWebhookWithManager(mgr); err != nil {
 			setupLog.Error(err, "unable to create webhook", "webhook", "AWSManagedMachinePool")
 			os.Exit(1)
 		}
 	}
 
-	if err := (&ekscontrolplanev1.AWSManagedControlPlane{}).SetupWebhookWithManager(mgr); err != nil {
+	if err := (&ekswebhooks.AWSManagedControlPlane{}).SetupWebhookWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create webhook", "webhook", "AWSManagedControlPlane")
+		os.Exit(1)
+	}
+
+	if err := (&ekswebhooks.AWSManagedControlPlaneTemplate{}).SetupWebhookWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create webhook", "webhook", "AWSManagedControlPlaneTemplate")
 		os.Exit(1)
 	}
 }
 
 func initFlags(fs *pflag.FlagSet) {
-	fs.StringVar(
-		&metricsBindAddr,
-		"metrics-bind-addr",
-		"localhost:8080",
-		"The address the metric endpoint binds to.",
-	)
-
 	fs.BoolVar(
 		&enableLeaderElection,
 		"leader-elect",
 		false,
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.",
+	)
+
+	fs.DurationVar(
+		&leaderElectionLeaseDuration,
+		"leader-elect-lease-duration",
+		15*time.Second,
+		"Interval at which non-leader candidates will wait to force acquire leadership (duration string)",
+	)
+
+	fs.DurationVar(
+		&leaderElectionRenewDeadline,
+		"leader-elect-renew-deadline",
+		10*time.Second,
+		"Duration that the leading controller manager will retry refreshing leadership before giving up (duration string)",
+	)
+
+	fs.DurationVar(
+		&leaderElectionRetryPeriod,
+		"leader-elect-retry-period",
+		2*time.Second,
+		"Duration the LeaderElector clients should wait between tries of actions (duration string)",
 	)
 
 	fs.StringVar(
@@ -451,6 +631,18 @@ func initFlags(fs *pflag.FlagSet) {
 		"Number of AWSMachines to process simultaneously",
 	)
 
+	fs.DurationVar(&waitInfraPeriod,
+		"wait-infra-period",
+		1*time.Minute,
+		"The minimum interval at which reconcile process wait for infrastructure to be ready.",
+	)
+
+	fs.DurationVar(&maxWaitActiveUpdateDelete,
+		"max-wait-managed-resources",
+		30*time.Minute,
+		"The maximum duration to wait for managed AWS resources to be ready.",
+	)
+
 	fs.DurationVar(&syncPeriod,
 		"sync-period",
 		10*time.Minute,
@@ -475,7 +667,7 @@ func initFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&serviceEndpoints,
 		"service-endpoints",
 		"",
-		"Set custom AWS service endpoins in semi-colon separated format: ${SigningRegion1}:${ServiceID1}=${URL},${ServiceID2}=${URL};${SigningRegion2}...",
+		"Set custom AWS service endpoints in semi-colon separated format: ${SigningRegion1}:${ServiceID1}=${URL},${ServiceID2}=${URL};${SigningRegion2}...",
 	)
 
 	fs.StringVar(
@@ -485,8 +677,17 @@ func initFlags(fs *pflag.FlagSet) {
 		fmt.Sprintf("Label value that the controller watches to reconcile cluster-api objects. Label key is always %s. If unspecified, the controller watches for all cluster-api objects.", clusterv1.WatchLabel),
 	)
 
+	fs.StringSliceVar(
+		&disabledControllers,
+		"disable-controllers",
+		nil,
+		fmt.Sprintf("Sets of controllers that should be disabled for this instance of the controller manager in a comma-separated list. Options are: %q", strings.Join(controllers.GetValidNames(), ",")),
+	)
+
 	logs.AddFlags(fs, logs.SkipLoggingConfigurationFlags())
-	logOptions.AddFlags(fs)
+	v1.AddFlags(logOptions, fs)
 
 	feature.MutableGates.AddFlag(fs)
+
+	flags.AddManagerOptions(fs, &managerOptions)
 }
