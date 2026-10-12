@@ -644,6 +644,12 @@ func (s *Service) createLaunchTemplateData(scope scope.LaunchTemplateScope, imag
 		}
 	}
 
+	if lt.NetworkPerformanceOptions != nil {
+		data.NetworkPerformanceOptions = &types.LaunchTemplateNetworkPerformanceOptionsRequest{
+			BandwidthWeighting: types.InstanceBandwidthWeighting(lt.NetworkPerformanceOptions.BandwidthWeighting),
+		}
+	}
+
 	if len(lt.IamInstanceProfile) > 0 {
 		data.IamInstanceProfile = &types.LaunchTemplateIamInstanceProfileSpecificationRequest{
 			Name: aws.String(lt.IamInstanceProfile),

@@ -1204,10 +1204,11 @@ func TestCreateLaunchTemplate(t *testing.T) {
 	}
 	userData := []byte{1, 0, 0}
 	testCases := []struct {
-		name                 string
-		awsResourceReference []infrav1.AWSResourceReference
-		expect               func(g *WithT, m *mocks.MockEC2APIMockRecorder)
-		check                func(g *WithT, s string, e error)
+		name                      string
+		awsResourceReference      []infrav1.AWSResourceReference
+		networkPerformanceOptions *expinfrav1.NetworkPerformanceOptions
+		expect                    func(g *WithT, m *mocks.MockEC2APIMockRecorder)
+		check                     func(g *WithT, s string, e error)
 	}{
 		{
 			name:                 "Should not return error if successfully created launch template id",
@@ -1415,6 +1416,75 @@ func TestCreateLaunchTemplate(t *testing.T) {
 				g.Expect(err).To(HaveOccurred())
 			},
 		},
+		{
+			name:                      "Should include network performance options when bandwidth weighting is set",
+			awsResourceReference:      []infrav1.AWSResourceReference{{ID: aws.String("1")}},
+			networkPerformanceOptions: &expinfrav1.NetworkPerformanceOptions{BandwidthWeighting: "vpc-1"},
+			expect: func(g *WithT, m *mocks.MockEC2APIMockRecorder) {
+				expectedInput := &ec2.CreateLaunchTemplateInput{
+					LaunchTemplateData: &ec2types.RequestLaunchTemplateData{
+						InstanceType: ec2types.InstanceTypeT3Large,
+						IamInstanceProfile: &ec2types.LaunchTemplateIamInstanceProfileSpecificationRequest{
+							Name: aws.String("instance-profile"),
+						},
+						KeyName:          aws.String("default"),
+						UserData:         ptr.To[string](base64.StdEncoding.EncodeToString(userData)),
+						SecurityGroupIds: []string{"nodeSG", "lbSG", "1"},
+						ImageId:          aws.String("imageID"),
+						InstanceMarketOptions: &ec2types.LaunchTemplateInstanceMarketOptionsRequest{
+							MarketType: ec2types.MarketTypeSpot,
+							SpotOptions: &ec2types.LaunchTemplateSpotMarketOptionsRequest{
+								MaxPrice: aws.String("0.9"),
+							},
+						},
+						NetworkPerformanceOptions: &ec2types.LaunchTemplateNetworkPerformanceOptionsRequest{
+							BandwidthWeighting: ec2types.InstanceBandwidthWeightingVpc1,
+						},
+						TagSpecifications: []ec2types.LaunchTemplateTagSpecificationRequest{
+							{
+								ResourceType: ec2types.ResourceTypeInstance,
+								Tags:         defaultEC2AndDataTags("aws-mp-name", "cluster-name", userDataSecretKey, testBootstrapDataHash),
+							},
+							{
+								ResourceType: ec2types.ResourceTypeVolume,
+								Tags:         defaultEC2Tags("aws-mp-name", "cluster-name"),
+							},
+						},
+					},
+					LaunchTemplateName: aws.String("aws-mp-name"),
+					TagSpecifications: []ec2types.TagSpecification{
+						{
+							ResourceType: ec2types.ResourceTypeLaunchTemplate,
+							Tags:         defaultEC2Tags("aws-mp-name", "cluster-name"),
+						},
+					},
+				}
+				m.CreateLaunchTemplate(context.TODO(), gomock.AssignableToTypeOf(expectedInput)).Return(&ec2.CreateLaunchTemplateOutput{
+					LaunchTemplate: &ec2types.LaunchTemplate{
+						LaunchTemplateId: aws.String("launch-template-id"),
+					},
+				}, nil).Do(func(ctx context.Context, arg *ec2.CreateLaunchTemplateInput, requestOptions ...ec2.Options) {
+					formatTagsInput(arg)
+					if !cmp.Equal(expectedInput, arg, cmpopts.IgnoreUnexported(
+						ec2types.LaunchTemplateIamInstanceProfileSpecificationRequest{},
+						ec2types.LaunchTemplateSpotMarketOptionsRequest{},
+						ec2types.LaunchTemplateInstanceMarketOptionsRequest{},
+						ec2types.LaunchTemplateNetworkPerformanceOptionsRequest{},
+						ec2types.Tag{},
+						ec2types.LaunchTemplateTagSpecificationRequest{},
+						ec2types.RequestLaunchTemplateData{},
+						ec2types.TagSpecification{},
+						ec2.CreateLaunchTemplateInput{},
+					)) {
+						t.Fatalf("mismatch in input expected: %+v, got: %+v", expectedInput, arg)
+					}
+				})
+			},
+			check: func(g *WithT, id string, err error) {
+				g.Expect(id).Should(Equal("launch-template-id"))
+				g.Expect(err).NotTo(HaveOccurred())
+			},
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1432,6 +1502,7 @@ func TestCreateLaunchTemplate(t *testing.T) {
 			g.Expect(err).NotTo(HaveOccurred())
 
 			ms.AWSMachinePool.Spec.AWSLaunchTemplate.AdditionalSecurityGroups = tc.awsResourceReference
+			ms.AWSMachinePool.Spec.AWSLaunchTemplate.NetworkPerformanceOptions = tc.networkPerformanceOptions
 
 			s := NewService(cs)
 			s.EC2Client = mockEC2Client
