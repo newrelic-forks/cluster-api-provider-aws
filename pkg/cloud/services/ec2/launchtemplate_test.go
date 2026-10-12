@@ -561,6 +561,39 @@ func TestServiceSDKToLaunchTemplate(t *testing.T) {
 			wantDataSecretKey:     &types.NamespacedName{Namespace: "bootstrap-secret-ns", Name: "bootstrap-secret"},
 			wantBootstrapDataHash: &testBootstrapDataHash,
 		},
+		{
+			name: "network performance options",
+			input: ec2types.LaunchTemplateVersion{
+				LaunchTemplateId:   aws.String("lt-12345"),
+				LaunchTemplateName: aws.String("foo"),
+				LaunchTemplateData: &ec2types.ResponseLaunchTemplateData{
+					ImageId: aws.String("foo-image"),
+					IamInstanceProfile: &ec2types.LaunchTemplateIamInstanceProfileSpecification{
+						Arn: aws.String("instance-profile/foo-profile"),
+					},
+					KeyName: aws.String("foo-keyname"),
+					NetworkPerformanceOptions: &ec2types.LaunchTemplateNetworkPerformanceOptions{
+						BandwidthWeighting: ec2types.InstanceBandwidthWeightingVpc1,
+					},
+					UserData: aws.String(base64.StdEncoding.EncodeToString([]byte(testUserData))),
+				},
+				VersionNumber: aws.Int64(1),
+			},
+			wantLT: &expinfrav1.AWSLaunchTemplate{
+				Name: "foo",
+				AMI: infrav1.AMIReference{
+					ID: aws.String("foo-image"),
+				},
+				IamInstanceProfile: "foo-profile",
+				SSHKeyName:         aws.String("foo-keyname"),
+				VersionNumber:      aws.Int64(1),
+				NetworkPerformanceOptions: &expinfrav1.NetworkPerformanceOptions{
+					BandwidthWeighting: "vpc-1",
+				},
+			},
+			wantUserDataHash:  testUserDataHash,
+			wantDataSecretKey: nil,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

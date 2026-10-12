@@ -946,6 +946,12 @@ func (s *Service) SDKToLaunchTemplate(d types.LaunchTemplateVersion) (*expinfrav
 		}
 	}
 
+	if v.NetworkPerformanceOptions != nil {
+		i.NetworkPerformanceOptions = &expinfrav1.NetworkPerformanceOptions{
+			BandwidthWeighting: string(v.NetworkPerformanceOptions.BandwidthWeighting),
+		}
+	}
+
 	if v.PrivateDnsNameOptions != nil {
 		i.PrivateDNSName = &infrav1.PrivateDNSName{
 			EnableResourceNameDNSAAAARecord: v.PrivateDnsNameOptions.EnableResourceNameDnsAAAARecord,
