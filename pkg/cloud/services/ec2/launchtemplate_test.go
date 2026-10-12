@@ -781,6 +781,35 @@ func TestServiceLaunchTemplateNeedsUpdate(t *testing.T) {
 			wantErr:               false,
 		},
 		{
+			name: "new launch template network performance options, adding vpc-1 bandwidth weighting",
+			incoming: &expinfrav1.AWSLaunchTemplate{
+				NetworkPerformanceOptions: &expinfrav1.NetworkPerformanceOptions{
+					BandwidthWeighting: "vpc-1",
+				},
+			},
+			existing: &expinfrav1.AWSLaunchTemplate{
+				AdditionalSecurityGroups: []infrav1.AWSResourceReference{
+					{ID: aws.String("sg-111")},
+					{ID: aws.String("sg-222")},
+				},
+			},
+			want:                  true,
+			wantNeedsUpdateReason: services.LaunchTemplateNeedsUpdateReasonNetworkPerformanceOptions,
+			wantErr:               false,
+		},
+		{
+			name:     "new launch template network performance options, removing vpc-1 bandwidth weighting",
+			incoming: &expinfrav1.AWSLaunchTemplate{},
+			existing: &expinfrav1.AWSLaunchTemplate{
+				NetworkPerformanceOptions: &expinfrav1.NetworkPerformanceOptions{
+					BandwidthWeighting: "vpc-1",
+				},
+			},
+			want:                  true,
+			wantNeedsUpdateReason: services.LaunchTemplateNeedsUpdateReasonNetworkPerformanceOptions,
+			wantErr:               false,
+		},
+		{
 			name: "Should return true if incoming SpotMarketOptions is different from existing SpotMarketOptions",
 			incoming: &expinfrav1.AWSLaunchTemplate{
 				SpotMarketOptions: &infrav1.SpotMarketOptions{

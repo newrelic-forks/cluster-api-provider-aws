@@ -54,6 +54,8 @@ const (
 	LaunchTemplateNeedsUpdateReasonInstanceType LaunchTemplateNeedsUpdateReason = "InstanceType"
 	// LaunchTemplateNeedsUpdateReasonInstanceMetadataOptions means a difference in the instance metadata options was found.
 	LaunchTemplateNeedsUpdateReasonInstanceMetadataOptions LaunchTemplateNeedsUpdateReason = "InstanceMetadataOptions"
+	// LaunchTemplateNeedsUpdateReasonNetworkPerformanceOptions means a difference in the network performance options was found.
+	LaunchTemplateNeedsUpdateReasonNetworkPerformanceOptions LaunchTemplateNeedsUpdateReason = "NetworkPerformanceOptions"
 	// LaunchTemplateNeedsUpdateReasonSpotMarketOptions means a difference in the spot market options was found.
 	LaunchTemplateNeedsUpdateReasonSpotMarketOptions LaunchTemplateNeedsUpdateReason = "SpotMarketOptions"
 	// LaunchTemplateNeedsUpdateReasonCapacityReservationID means a difference in the capacity reservation ID was found.

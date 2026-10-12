@@ -1028,6 +1028,10 @@ func (s *Service) LaunchTemplateNeedsUpdate(scope scope.LaunchTemplateScope, inc
 		return true, services.LaunchTemplateNeedsUpdateReasonInstanceMetadataOptions, nil
 	}
 
+	if !cmp.Equal(incoming.NetworkPerformanceOptions, existing.NetworkPerformanceOptions) {
+		return true, services.LaunchTemplateNeedsUpdateReasonNetworkPerformanceOptions, nil
+	}
+
 	if !cmp.Equal(incoming.SpotMarketOptions, existing.SpotMarketOptions) {
 		return true, services.LaunchTemplateNeedsUpdateReasonSpotMarketOptions, nil
 	}
