@@ -793,6 +793,22 @@ spec:
                   name:
                     description: The name of the launch template.
                     type: string
+                  networkPerformanceOptions:
+                    description: |-
+                      NetworkPerformanceOptions contains launch template settings to boost network performance
+                      for the type of workload that runs on the instance.
+                    properties:
+                      bandwidthWeighting:
+                        description: |-
+                          BandwidthWeighting boosts baseline bandwidth for either networking (vpc-1) or
+                          EBS (ebs-1). The default option uses the standard bandwidth configuration for
+                          the instance type.
+                        enum:
+                        - default
+                        - vpc-1
+                        - ebs-1
+                        type: string
+                    type: object
                   nonRootVolumes:
                     description: Configuration options for the non root storage volumes.
                     items:

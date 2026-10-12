@@ -130,6 +130,11 @@ type AWSLaunchTemplate struct {
 	// +optional
 	InstanceMetadataOptions *infrav1.InstanceMetadataOptions `json:"instanceMetadataOptions,omitempty"`
 
+	// NetworkPerformanceOptions contains launch template settings to boost network performance
+	// for the type of workload that runs on the instance.
+	// +optional
+	NetworkPerformanceOptions *NetworkPerformanceOptions `json:"networkPerformanceOptions,omitempty"`
+
 	// PrivateDNSName is the options for the instance hostname.
 	// +optional
 	PrivateDNSName *infrav1.PrivateDNSName `json:"privateDnsName,omitempty"`
@@ -154,6 +159,16 @@ type AWSLaunchTemplate struct {
 	// +kubebuilder:validation:Enum="";None;CapacityReservationsOnly;Open
 	// +optional
 	CapacityReservationPreference infrav1.CapacityReservationPreference `json:"capacityReservationPreference,omitempty"`
+}
+
+// NetworkPerformanceOptions contains launch template settings to boost network performance.
+type NetworkPerformanceOptions struct {
+	// BandwidthWeighting boosts baseline bandwidth for either networking (vpc-1) or
+	// EBS (ebs-1). The default option uses the standard bandwidth configuration for
+	// the instance type.
+	// +kubebuilder:validation:Enum=default;vpc-1;ebs-1
+	// +optional
+	BandwidthWeighting string `json:"bandwidthWeighting,omitempty"`
 }
 
 // Overrides are used to override the instance type specified by the launch template with multiple
